@@ -1,0 +1,26 @@
+{
+  "name": "multi-modal-crowdsourced-courier",
+  "version": "1.0.0",
+  "description": "全運具跨城／跨國順路捎帶快遞媒合平台核心服務",
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types backend/src/server.ts",
+    "start:local": "agy-node --experimental-strip-types backend/src/server.ts",
+    "test:pricing": "agy-node --experimental-strip-types backend/tests/pricing.test.ts",
+    "test:matching": "agy-node --experimental-strip-types backend/tests/corridor_matching.test.ts",
+    "test:compliance": "agy-node --experimental-strip-types backend/tests/compliance_and_safety.test.ts",
+    "test:api": "agy-node --experimental-strip-types backend/tests/api_server.test.ts",
+    "test": "npm run test:pricing && npm run test:matching && npm run test:compliance && npm run test:api",
+    "demo": "agy-node --experimental-strip-types scripts/demo_simulation.ts"
+  },
+  "keywords": [
+    "crowdsourced-logistics",
+    "along-the-way",
+    "courier-matching",
+    "multi-modal",
+    "hsr-delivery",
+    "flight-delivery"
+  ],
+  "author": "Antigravity Engineering",
+  "license": "MIT"
+}

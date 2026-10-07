@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # 空間地理資料庫 (PostgreSQL 16 + PostGIS)
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: courier_postgis
+    restart: always
+    environment:
+      POSTGRES_DB: courier_platform
+      POSTGRES_USER: courier_admin
+      POSTGRES_PASSWORD: courier_secret_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U courier_admin -d courier_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 高速快取與即時座標索引 (Redis 7)
+  redis:
+    image: redis:7-alpine
+    container_name: courier_redis
+    restart: always
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:

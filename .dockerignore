@@ -1,0 +1,12 @@
+node_modules
+.git
+.github
+.env*
+*.log
+apps/mobile_app
+docs
+README.md
+Dockerfile*
+docker-compose*.yml
+.DS_Store
+Thumbs.db

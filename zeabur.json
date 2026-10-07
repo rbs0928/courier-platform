@@ -1,0 +1,6 @@
+{
+  "$schema": "https://schema.zeabur.app/v1",
+  "name": "multi-modal-courier-platform",
+  "dockerfile": "Dockerfile",
+  "port": 3000
+}

@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>全運具跨城／跨國順路捎帶快遞媒合平台</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-4 md:p-8 min-h-screen">
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Header 頂部導覽 -->
+    <header class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🌍</span>
+          <h1 class="text-2xl font-bold tracking-tight text-[var(--foreground)]">全運具順路捎帶快遞平台</h1>
+          <span class="bg-blue-500/10 text-blue-500 text-xs px-2.5 py-1 rounded-full font-medium">Multi-Modal Prototype</span>
+        </div>
+        <p class="text-[var(--muted-foreground)] text-sm mt-1">機車同城・捷運通勤・私家車自駕・高鐵跨城・國際航班 行李空間共享媒合</p>
+      </div>
+
+      <!-- Tab 切換按鈕 -->
+      <div class="flex bg-[var(--background)] p-1 rounded-xl border border-[var(--border)] text-sm font-medium">
+        <button id="tab-sender" onclick="switchTab('sender')" class="px-4 py-2 rounded-lg bg-[var(--card)] shadow-sm text-[var(--foreground)] transition-all">
+          📦 寄件試算與發單
+        </button>
+        <button id="tab-traveler" onclick="switchTab('traveler')" class="px-4 py-2 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all">
+          🛵 旅人/騎士接單大廳
+        </button>
+        <button id="tab-admin" onclick="switchTab('admin')" class="px-4 py-2 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all">
+          📊 資金託管與風控後台
+        </button>
+      </div>
+    </header>
+
+    <!-- Tab 1: 寄件人端 (Sender) -->
+    <main id="view-sender" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- 運具選擇與條件輸入 -->
+        <div class="lg:col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 space-y-5">
+          <h2 class="text-lg font-semibold flex items-center gap-2">
+            <span>🚀</span> 步驟一：選擇順路運具與配送需求
+          </h2>
+
+          <!-- 運具按鈕群 -->
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            <button type="button" onclick="selectMode('MOTORCYCLE')" id="btn-mode-MOTORCYCLE" class="mode-btn p-3 rounded-xl border-2 border-blue-500 bg-blue-500/10 flex flex-col items-center gap-1.5 transition-all text-center">
+              <span class="text-2xl">🛵</span>
+              <span class="font-medium text-xs">機車外送</span>
+              <span class="text-[11px] text-[var(--muted-foreground)]">同城極速到府</span>
+            </button>
+            <button type="button" onclick="selectMode('MRT')" id="btn-mode-MRT" class="mode-btn p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--card)] flex flex-col items-center gap-1.5 transition-all text-center">
+              <span class="text-2xl">🚇</span>
+              <span class="font-medium text-xs">捷運公車</span>
+              <span class="text-[11px] text-[var(--muted-foreground)]">通勤站點面交</span>
+            </button>
+            <button type="button" onclick="selectMode('CAR')" id="btn-mode-CAR" class="mode-btn p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--card)] flex flex-col items-center gap-1.5 transition-all text-center">
+              <span class="text-2xl">🚗</span>
+              <span class="font-medium text-xs">私家休旅車</span>
+              <span class="text-[11px] text-[var(--muted-foreground)]">後車廂大件油資</span>
+            </button>
+            <button type="button" onclick="selectMode('HSR')" id="btn-mode-HSR" class="mode-btn p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--card)] flex flex-col items-center gap-1.5 transition-all text-center">
+              <span class="text-2xl">🚄</span>
+              <span class="font-medium text-xs">台灣高鐵</span>
+              <span class="text-[11px] text-[var(--muted-foreground)]">3hr 跨城極速</span>
+            </button>
+            <button type="button" onclick="selectMode('FLIGHT')" id="btn-mode-FLIGHT" class="mode-btn p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--card)] flex flex-col items-center gap-1.5 transition-all text-center">
+              <span class="text-2xl">✈️</span>
+              <span class="font-medium text-xs">國際航班</span>
+              <span class="text-[11px] text-[var(--muted-foreground)]">出國行李空間</span>
+            </button>
+          </div>
+
+          <!-- 表單輸入區 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">寄件/取件點</label>
+              <select id="input-pickup" onchange="recalculateQuote()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="TPE_MAIN">台北車站 (M8/站前/高鐵)</option>
+                <option value="SANCHONG">新北三重菜寮門市</option>
+                <option value="NEIHU">台北內湖科學園區</option>
+                <option value="TSA">台北松山機場 (TSA)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">收件/送達點</label>
+              <select id="input-dropoff" onchange="recalculateQuote()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="DAAN">台北市大安區忠孝敦化商辦</option>
+                <option value="HSINCHU_IC">國道一號新竹科學園區交流道</option>
+                <option value="ZUYING_HSR">高鐵左營站 (高雄)</option>
+                <option value="TOKYO_HND">日本東京羽田國際機場 (HND)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">貨物名稱</label>
+              <input type="text" id="input-title" value="手工生乳捲蛋糕禮盒" oninput="checkContrabandLive()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如：文件、露營帳篷、茶葉">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">包裹重量 (kg)</label>
+              <input type="number" id="input-weight" value="2.5" step="0.5" min="0.1" max="50" oninput="recalculateQuote()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">貨物申報價值 (TWD)</label>
+              <input type="number" id="input-value" value="1200" step="100" oninput="recalculateQuote()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">配送急迫性</label>
+              <select id="input-urgency" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option>極速特急 (1~2 小時內送達)</option>
+                <option>當日預約順路達 (4~6 小時)</option>
+                <option>隔日抵達</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 違禁品即時安全防護提示 -->
+          <div id="safety-warning" class="hidden p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-xs flex items-center gap-2">
+            <span>⚠️</span>
+            <span id="safety-warning-text">偵測到違禁危險品！航空及大眾運輸平台嚴禁攜帶。</span>
+          </div>
+        </div>
+
+        <!-- 即時試算與費用報價卡片 -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 flex flex-col justify-between space-y-6 shadow-sm">
+          <div>
+            <div class="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+              <h3 class="font-semibold text-sm">💰 費用透明試算明細</h3>
+              <span id="badge-transport-name" class="text-xs bg-blue-500/10 text-blue-500 px-2.5 py-0.5 rounded-full font-medium">機車外送</span>
+            </div>
+
+            <div class="space-y-3 mt-4 text-xs">
+              <div class="flex justify-between text-[var(--muted-foreground)]">
+                <span>基礎起跳車資</span>
+                <span id="quote-base" class="font-medium text-[var(--foreground)]">$75 TWD</span>
+              </div>
+              <div class="flex justify-between text-[var(--muted-foreground)]">
+                <span>超額里程/油資補貼</span>
+                <span id="quote-dist" class="font-medium text-[var(--foreground)]">$48 TWD</span>
+              </div>
+              <div class="flex justify-between text-[var(--muted-foreground)]">
+                <span>載重/置物空間費</span>
+                <span id="quote-weight" class="font-medium text-[var(--foreground)]">$6 TWD</span>
+              </div>
+              <div class="flex justify-between text-[var(--muted-foreground)]">
+                <span>貨物保價/保險金</span>
+                <span id="quote-ins" class="font-medium text-[var(--foreground)]">$12 TWD</span>
+              </div>
+              <div class="flex justify-between text-[var(--muted-foreground)]">
+                <span>報關合規手續費</span>
+                <span id="quote-customs" class="font-medium text-[var(--foreground)]">$0 TWD</span>
+              </div>
+
+              <div class="pt-3 border-t border-[var(--border)] flex justify-between items-baseline">
+                <div>
+                  <span class="text-sm font-semibold">總託管運費</span>
+                  <p class="text-[11px] text-[var(--muted-foreground)]">全程平台資金託管保護</p>
+                </div>
+                <span id="quote-total" class="text-2xl font-bold text-blue-500">$141 TWD</span>
+              </div>
+
+              <!-- 分帳預覽 -->
+              <div class="bg-[var(--background)] p-3 rounded-xl border border-[var(--border)] space-y-1 mt-2">
+                <div class="flex justify-between text-[11px]">
+                  <span class="text-[var(--muted-foreground)]">🛵 騎士/旅人實得 (補貼車資):</span>
+                  <span id="quote-earnings" class="font-semibold text-green-500">$120 TWD</span>
+                </div>
+                <div class="flex justify-between text-[11px]">
+                  <span class="text-[var(--muted-foreground)]">🛡️ 平台營運抽成:</span>
+                  <span id="quote-commission" class="font-medium text-[var(--foreground)]">$21 TWD</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button id="btn-post-order" onclick="submitOrder()" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-medium rounded-xl text-sm transition-all shadow-md shadow-blue-500/20">
+            確認發單並鎖定託管資金
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Tab 2: 旅人與騎士接單端 (Traveler / Courier) -->
+    <main id="view-traveler" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- 旅人行程與時空走廊雷達 -->
+        <div class="lg:col-span-2 space-y-4">
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-semibold flex items-center gap-2">
+                <span>🧭</span> 當前登記行程 (Spatio-Temporal Corridor)
+              </h2>
+              <span class="text-xs bg-green-500/10 text-green-500 px-2.5 py-1 rounded-full font-medium">在線媒合中</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div onclick="selectActiveItinerary('HSR')" id="itin-card-HSR" class="itin-card p-4 rounded-xl border-2 border-blue-500 bg-blue-500/10 cursor-pointer transition-all">
+                <div class="flex justify-between items-start">
+                  <span class="text-xs font-semibold">🚄 高鐵 115 次</span>
+                  <span class="text-[11px] text-blue-500 font-bold">100 分推薦</span>
+                </div>
+                <p class="text-xs text-[var(--muted-foreground)] mt-1">台北站 ➔ 高鐵左營站</p>
+                <p class="text-xs font-medium text-[var(--foreground)] mt-2">出發: 14:00 (剩餘 8kg)</p>
+              </div>
+
+              <div onclick="selectActiveItinerary('MOTO')" id="itin-card-MOTO" class="itin-card p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--card)] cursor-pointer transition-all">
+                <div class="flex justify-between items-start">
+                  <span class="text-xs font-semibold">🛵 機車通勤/跑單</span>
+                  <span class="text-[11px] text-green-500 font-bold">99 分推薦</span>
+                </div>
+                <p class="text-xs text-[var(--muted-foreground)] mt-1">三重菜寮 ➔ 台北大安</p>
+                <p class="text-xs font-medium text-[var(--foreground)] mt-2">出發: 15:30 (置物箱 10kg)</p>
+              </div>
+
+              <div onclick="selectActiveItinerary('CAR')" id="itin-card-CAR" class="itin-card p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--card)] cursor-pointer transition-all">
+                <div class="flex justify-between items-start">
+                  <span class="text-xs font-semibold">🚗 休旅車南下返鄉</span>
+                  <span class="text-[11px] text-purple-500 font-bold">98 分推薦</span>
+                </div>
+                <p class="text-xs text-[var(--muted-foreground)] mt-1">內湖 ➔ 新竹科學園區</p>
+                <p class="text-xs font-medium text-[var(--foreground)] mt-2">出發: 18:00 (後車廂 40kg)</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 時空媒合結果列表 -->
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 space-y-4">
+            <h3 class="font-semibold text-sm flex items-center justify-between">
+              <span>🎯 順路待運包裹推薦清單</span>
+              <span id="matching-badge" class="text-xs text-[var(--muted-foreground)]">時空偏離度 &lt; 0.5km</span>
+            </h3>
+
+            <div id="matched-package-card" class="border border-blue-500/30 bg-blue-500/5 rounded-xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span id="pkg-tag" class="bg-blue-500 text-white text-[11px] px-2 py-0.5 rounded-full font-medium">高鐵急件</span>
+                  <h4 id="pkg-title" class="font-semibold text-sm">工控高精密通訊備品晶片</h4>
+                </div>
+                <p id="pkg-route" class="text-xs text-[var(--muted-foreground)]">取件: 台北車站 M8 門市 ➔ 送達: 高鐵左營站 4 號出口</p>
+                <p id="pkg-meta" class="text-[11px] text-[var(--foreground)]">重量: 1.2 kg ｜ 繞路偏差: 0 km ｜ 截止餘裕: 120 分鐘</p>
+              </div>
+
+              <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+                <div class="text-right">
+                  <p class="text-[11px] text-[var(--muted-foreground)]">接單可賺補貼</p>
+                  <p id="pkg-reward" class="text-lg font-bold text-green-500">+$664 TWD</p>
+                </div>
+                <button onclick="acceptOrder()" id="btn-accept" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium transition-all">
+                  立即接單
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 面交驗視與雙重 OTP 實體操作模擬窗 -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 space-y-5">
+          <h3 class="font-semibold text-sm flex items-center gap-2">
+            <span>🛡️</span> 開箱驗視與交接動態碼驗證
+          </h3>
+
+          <div class="space-y-4">
+            <!-- 步驟進度條 -->
+            <div class="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+              <span id="step-1" class="font-semibold text-blue-500">1. 取件驗視</span>
+              <span>➔</span>
+              <span id="step-2">2. 運送中</span>
+              <span>➔</span>
+              <span id="step-3">3. 簽收結算</span>
+            </div>
+
+            <!-- 取件 OTP 與開箱勾選 -->
+            <div id="box-inspection" class="space-y-3 bg-[var(--background)] p-4 rounded-xl border border-[var(--border)] text-xs">
+              <p class="font-semibold text-[var(--foreground)]">步驟 1：開箱驗視協議</p>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" id="chk-contraband" checked class="rounded text-blue-500">
+                <span>確認無易燃/未檢疫等違禁品</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" id="chk-photos" checked class="rounded text-blue-500">
+                <span>已拍攝開箱內容物與封箱照存證 (2張)</span>
+              </label>
+
+              <div class="pt-2">
+                <label class="block text-[11px] text-[var(--muted-foreground)] mb-1">寄件人取件 OTP (模擬碼: 882314)</label>
+                <div class="flex gap-2">
+                  <input type="text" id="input-pickup-otp" value="882314" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-center font-mono font-bold">
+                  <button onclick="verifyPickupOtp()" id="btn-verify-pickup" class="px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-xs whitespace-nowrap">核驗取件</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 送達簽收 OTP -->
+            <div id="box-delivery" class="space-y-3 bg-[var(--background)] p-4 rounded-xl border border-[var(--border)] text-xs opacity-50 pointer-events-none">
+              <p class="font-semibold text-[var(--foreground)]">步驟 2：送達簽收</p>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" id="chk-pod" checked class="rounded text-blue-500">
+                <span>現場拍照交接完成 (POD)</span>
+              </label>
+              <div>
+                <label class="block text-[11px] text-[var(--muted-foreground)] mb-1">收件人簽收 OTP (模擬碼: 991205)</label>
+                <div class="flex gap-2">
+                  <input type="text" id="input-dropoff-otp" value="991205" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-center font-mono font-bold">
+                  <button onclick="verifyDropoffOtp()" id="btn-verify-dropoff" class="px-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-xs whitespace-nowrap">簽收解鎖</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 結果通知 -->
+            <div id="flow-status" class="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-500 text-xs hidden">
+              請點擊「立即接單」開始流程。
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Tab 3: 營運與風控後台 (Admin) -->
+    <main id="view-admin" class="hidden space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 space-y-1">
+          <p class="text-xs text-[var(--muted-foreground)]">平台託管資金池 (Escrow)</p>
+          <p class="text-2xl font-bold text-blue-500">$84,520 <span class="text-xs font-normal text-[var(--muted-foreground)]">TWD</span></p>
+          <p class="text-[11px] text-green-500">↑ 履約無爭議 99.8%</p>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 space-y-1">
+          <p class="text-xs text-[var(--muted-foreground)]">累積平台佣金收入</p>
+          <p class="text-2xl font-bold text-[var(--foreground)]">$15,280 <span class="text-xs font-normal text-[var(--muted-foreground)]">TWD</span></p>
+          <p class="text-[11px] text-blue-500">平均抽成率 16.5%</p>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 space-y-1">
+          <p class="text-xs text-[var(--muted-foreground)]">活躍順路旅人／騎士</p>
+          <p class="text-2xl font-bold text-[var(--foreground)]">428 <span class="text-xs font-normal text-[var(--muted-foreground)]">位</span></p>
+          <p class="text-[11px] text-blue-500">全台 8 大運具線上</p>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 space-y-1">
+          <p class="text-xs text-[var(--muted-foreground)]">智慧風控攔截次數</p>
+          <p class="text-2xl font-bold text-red-500">19 <span class="text-xs font-normal text-[var(--muted-foreground)]">件違禁品</span></p>
+          <p class="text-[11px] text-[var(--muted-foreground)]">防檢疫與危險品 0 漏放</p>
+        </div>
+      </div>
+
+      <!-- 運具營運佔比表格 -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6">
+        <h3 class="font-semibold text-sm mb-4">🚆 各運具順路物流運力佔比與平均補貼</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+              <tr>
+                <th class="pb-3 font-medium">運具類型</th>
+                <th class="pb-3 font-medium">主要路線場景</th>
+                <th class="pb-3 font-medium">平均配送耗時</th>
+                <th class="pb-3 font-medium">平均單筆車資補貼</th>
+                <th class="pb-3 font-medium">履約完成率</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[var(--border)] text-[var(--foreground)]">
+              <tr>
+                <td class="py-3 font-semibold">🛵 機車外送／速克達</td>
+                <td class="py-3">同城雙北、穿梭巷弄到府直送</td>
+                <td class="py-3">25 ~ 45 分鐘</td>
+                <td class="py-3 text-green-500 font-bold">$115 ~ $160 TWD</td>
+                <td class="py-3 text-blue-500">99.4%</td>
+              </tr>
+              <tr>
+                <td class="py-3 font-semibold">🚇 捷運／公車通勤</td>
+                <td class="py-3">日常上下班通勤站點面交</td>
+                <td class="py-3">30 ~ 60 分鐘</td>
+                <td class="py-3 text-green-500 font-bold">$90 ~ $130 TWD</td>
+                <td class="py-3 text-blue-500">99.8%</td>
+              </tr>
+              <tr>
+                <td class="py-3 font-semibold">🚗 私家車／休旅車</td>
+                <td class="py-3">台北至新竹/台中 交流道與大件</td>
+                <td class="py-3">1.5 ~ 2.5 小時</td>
+                <td class="py-3 text-green-500 font-bold">$850 ~ $1,200 TWD (油資/eTag)</td>
+                <td class="py-3 text-blue-500">98.9%</td>
+              </tr>
+              <tr>
+                <td class="py-3 font-semibold">🚄 台灣高鐵</td>
+                <td class="py-3">台北至左營/台中 極速精密樣品</td>
+                <td class="py-3">1.5 ~ 3 小時</td>
+                <td class="py-3 text-green-500 font-bold">$600 ~ $800 TWD</td>
+                <td class="py-3 text-blue-500">100.0%</td>
+              </tr>
+              <tr>
+                <td class="py-3 font-semibold">✈️ 國際航班</td>
+                <td class="py-3">台北松山至東京羽田/成田 行李託運</td>
+                <td class="py-3">當日跨境直送</td>
+                <td class="py-3 text-green-500 font-bold">$1,500 ~ $3,200 TWD</td>
+                <td class="py-3 text-blue-500">99.2%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <script>
+    let currentMode = 'MOTORCYCLE';
+    let currentStep = 0; // 0: init, 1: accepted, 2: in_transit, 3: delivered
+
+    function switchTab(tab) {
+      document.getElementById('view-sender').classList.add('hidden');
+      document.getElementById('view-traveler').classList.add('hidden');
+      document.getElementById('view-admin').classList.add('hidden');
+
+      ['sender', 'traveler', 'admin'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === tab) {
+          btn.className = 'px-4 py-2 rounded-lg bg-[var(--card)] shadow-sm text-[var(--foreground)] transition-all';
+        } else {
+          btn.className = 'px-4 py-2 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all';
+        }
+      });
+
+      document.getElementById(`view-${tab}`).classList.remove('hidden');
+    }
+
+    function selectMode(mode) {
+      currentMode = mode;
+      document.querySelectorAll('.mode-btn').forEach(b => {
+        b.className = 'mode-btn p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--card)] flex flex-col items-center gap-1.5 transition-all text-center';
+      });
+      const selectedBtn = document.getElementById(`btn-mode-${mode}`);
+      if (selectedBtn) {
+        selectedBtn.className = 'mode-btn p-3 rounded-xl border-2 border-blue-500 bg-blue-500/10 flex flex-col items-center gap-1.5 transition-all text-center';
+      }
+
+      // 依運具自動調整預設起訖點
+      const pickupSelect = document.getElementById('input-pickup');
+      const dropoffSelect = document.getElementById('input-dropoff');
+      const titleInput = document.getElementById('input-title');
+
+      if (mode === 'MOTORCYCLE') {
+        pickupSelect.value = 'SANCHONG';
+        dropoffSelect.value = 'DAAN';
+        titleInput.value = '手工生乳捲蛋糕禮盒';
+        document.getElementById('input-weight').value = '2.5';
+      } else if (mode === 'HSR') {
+        pickupSelect.value = 'TPE_MAIN';
+        dropoffSelect.value = 'ZUYING_HSR';
+        titleInput.value = '工控高精密通訊備品晶片';
+        document.getElementById('input-weight').value = '1.2';
+      } else if (mode === 'CAR') {
+        pickupSelect.value = 'NEIHU';
+        dropoffSelect.value = 'HSINCHU_IC';
+        titleInput.value = '大型露營充氣帳篷組';
+        document.getElementById('input-weight').value = '18.0';
+      } else if (mode === 'FLIGHT') {
+        pickupSelect.value = 'TSA';
+        dropoffSelect.value = 'TOKYO_HND';
+        titleInput.value = '台灣熟成高山茶葉禮盒';
+        document.getElementById('input-weight').value = '3.0';
+      }
+
+      recalculateQuote();
+    }
+
+    function recalculateQuote() {
+      const weight = parseFloat(document.getElementById('input-weight').value) || 1.0;
+      const value = parseFloat(document.getElementById('input-value').value) || 1000;
+      
+      let baseFare = 75;
+      let distFee = 48;
+      let weightFee = 6;
+      let insFee = Math.max(10, Math.round(value * 0.01));
+      let customsFee = 0;
+      let commissionRate = 0.15;
+      let modeName = '機車外送';
+
+      switch(currentMode) {
+        case 'MOTORCYCLE':
+          baseFare = 75;
+          distFee = 48; // ~7km
+          weightFee = Math.max(0, weight - 2) * 12;
+          insFee = Math.max(10, Math.round(value * 0.01));
+          commissionRate = 0.15;
+          modeName = '機車外送';
+          break;
+        case 'MRT':
+          baseFare = 80;
+          distFee = 25;
+          weightFee = Math.max(0, weight - 2) * 15;
+          insFee = Math.max(10, Math.round(value * 0.01));
+          commissionRate = 0.15;
+          modeName = '捷運公車通勤';
+          break;
+        case 'CAR':
+          baseFare = 160;
+          distFee = 565; // ~75km 台北至新竹國道
+          weightFee = Math.max(0, weight - 5) * 10;
+          insFee = Math.max(15, Math.round(value * 0.015));
+          commissionRate = 0.16;
+          modeName = '私家休旅車';
+          break;
+        case 'HSR':
+          baseFare = 350;
+          distFee = 160; // 300km
+          weightFee = Math.max(0, weight - 3) * 30;
+          insFee = Math.max(20, Math.round(value * 0.02));
+          commissionRate = 0.18;
+          modeName = '台灣高鐵';
+          break;
+        case 'FLIGHT':
+          baseFare = 800;
+          distFee = 0;
+          weightFee = Math.max(0, weight - 1) * 400;
+          customsFee = 200;
+          insFee = Math.max(30, Math.round(value * 0.03));
+          commissionRate = 0.20;
+          modeName = '國際航空航班';
+          break;
+      }
+
+      const total = baseFare + distFee + weightFee + insFee + customsFee;
+      const commission = Math.round(total * commissionRate);
+      const earnings = total - commission;
+
+      document.getElementById('badge-transport-name').innerText = modeName;
+      document.getElementById('quote-base').innerText = `$${baseFare} TWD`;
+      document.getElementById('quote-dist').innerText = `$${distFee} TWD`;
+      document.getElementById('quote-weight').innerText = `$${weightFee} TWD`;
+      document.getElementById('quote-ins').innerText = `$${insFee} TWD`;
+      document.getElementById('quote-customs').innerText = `$${customsFee} TWD`;
+      document.getElementById('quote-total').innerText = `$${total} TWD`;
+      document.getElementById('quote-earnings').innerText = `$${earnings} TWD`;
+      document.getElementById('quote-commission').innerText = `$${commission} TWD`;
+
+      checkContrabandLive();
+    }
+
+    function checkContrabandLive() {
+      const text = document.getElementById('input-title').value;
+      const warningBox = document.getElementById('safety-warning');
+      const warningText = document.getElementById('safety-warning-text');
+      const postBtn = document.getElementById('btn-post-order');
+
+      const banned = ['瓦斯', '香腸', '肉乾', '生肉', '毒品', '大麻', '爆竹', '易燃'];
+      let found = banned.find(w => text.includes(w));
+
+      if (found) {
+        warningBox.classList.remove('hidden');
+        warningText.innerText = `智慧風控攔截：此物品包含航空或大眾運輸管制字樣 "${found}"，請移除後重試。`;
+        postBtn.disabled = true;
+        postBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      } else {
+        warningBox.classList.add('hidden');
+        postBtn.disabled = false;
+        postBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+
+    function submitOrder() {
+      alert('✅ 訂單已建立！運費已全額存入平台 Escrow 資金託管。系統已自動向符合時空走廊的旅人/騎士推播！');
+      switchTab('traveler');
+    }
+
+    function selectActiveItinerary(type) {
+      document.querySelectorAll('.itin-card').forEach(c => {
+        c.className = 'itin-card p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--card)] cursor-pointer transition-all';
+      });
+      document.getElementById(`itin-card-${type}`).className = 'itin-card p-4 rounded-xl border-2 border-blue-500 bg-blue-500/10 cursor-pointer transition-all';
+
+      const tag = document.getElementById('pkg-tag');
+      const title = document.getElementById('pkg-title');
+      const route = document.getElementById('pkg-route');
+      const reward = document.getElementById('pkg-reward');
+
+      if (type === 'HSR') {
+        tag.innerText = '高鐵急件';
+        title.innerText = '工控高精密通訊備品晶片';
+        route.innerText = '取件: 台北車站 M8 門市 ➔ 送達: 高鐵左營站 4 號出口';
+        reward.innerText = '+$664 TWD';
+      } else if (type === 'MOTO') {
+        tag.innerText = '機車外送';
+        title.innerText = '手工生乳捲蛋糕禮盒';
+        route.innerText = '取件: 三重菜寮門市 ➔ 送達: 台北忠孝敦化商辦';
+        reward.innerText = '+$122 TWD';
+      } else if (type === 'CAR') {
+        tag.innerText = '私家車大件';
+        title.innerText = '大型露營充氣帳篷裝備組 (18kg)';
+        route.innerText = '取件: 台北內湖科學園區 ➔ 送達: 新竹公道五路交流道口';
+        reward.innerText = '+$869 TWD';
+      }
+    }
+
+    function acceptOrder() {
+      currentStep = 1;
+      const statusBox = document.getElementById('flow-status');
+      statusBox.classList.remove('hidden');
+      statusBox.innerText = '🎉 已成功接單！請前往取件點，現場執行「開箱驗視」並向寄件人索取動態取件 OTP。';
+      document.getElementById('step-1').className = 'font-bold text-blue-500';
+      document.getElementById('btn-accept').innerText = '已接單進行中';
+      document.getElementById('btn-accept').disabled = true;
+    }
+
+    function verifyPickupOtp() {
+      const otp = document.getElementById('input-pickup-otp').value.trim();
+      if (otp !== '882314') {
+        alert('❌ 取件驗證碼錯誤！請與現場寄件人核對。');
+        return;
+      }
+      currentStep = 2;
+      document.getElementById('step-1').className = 'text-green-500';
+      document.getElementById('step-2').className = 'font-bold text-blue-500';
+      document.getElementById('box-inspection').classList.add('opacity-50', 'pointer-events-none');
+      document.getElementById('box-delivery').classList.remove('opacity-50', 'pointer-events-none');
+
+      const statusBox = document.getElementById('flow-status');
+      statusBox.className = 'p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-500 text-xs';
+      statusBox.innerText = '✅ 開箱驗視照片存證成功！取件 OTP 驗證通過，包裹進入運送中 [IN_TRANSIT]。抵達時請向收件人索取簽收 OTP。';
+    }
+
+    function verifyDropoffOtp() {
+      const otp = document.getElementById('input-dropoff-otp').value.trim();
+      if (otp !== '991205') {
+        alert('❌ 簽收驗證碼錯誤！請與現場收件人核對。');
+        return;
+      }
+      currentStep = 3;
+      document.getElementById('step-2').className = 'text-green-500';
+      document.getElementById('step-3').className = 'font-bold text-green-500';
+      document.getElementById('box-delivery').classList.add('opacity-50', 'pointer-events-none');
+
+      const statusBox = document.getElementById('flow-status');
+      statusBox.className = 'p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-500 text-xs font-semibold';
+      statusBox.innerText = '🎉 簽收成功 [DELIVERED]！平台資金託管 (Escrow) 已即時解鎖分帳，收益已撥入您的錢包餘額！';
+    }
+
+    // 初始化報價
+    recalculateQuote();
+  </script>
+</body>
+</html>
