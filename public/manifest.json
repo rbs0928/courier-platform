@@ -1,0 +1,22 @@
+{
+  "name": "順路捎帶快遞平台",
+  "short_name": "順路快遞",
+  "description": "全運具跨城／跨國順路捎帶快遞媒合平台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -57,7 +57,7 @@ export function createServer(): http.Server {
     }
 
     try {
-      // 0. 首頁與可互動 Web 原型 (Web Interactive Prototype)
+      // 0. 首頁與 PWA 靜態資產服務 (Web 原型、manifest、Service Worker、圖標)
       if ((pathname === '/' || pathname === '/index.html' || pathname === '/prototype') && method === 'GET') {
         const publicHtmlPath = path.resolve('public/index.html');
         if (fs.existsSync(publicHtmlPath)) {
@@ -68,6 +68,36 @@ export function createServer(): http.Server {
           });
           return res.end(htmlContent);
         }
+      }
+
+      // 0.1 PWA 靜態檔案支援
+      if (method === 'GET' && pathname.match(/^\/(manifest\.json|sw\.js|icon-\d+\.png)$/)) {
+        const filePath = path.resolve('public', pathname.slice(1));
+        if (fs.existsSync(filePath)) {
+          const ext = path.extname(filePath);
+          const mimeTypes: Record<string, string> = {
+            '.json': 'application/manifest+json; charset=utf-8',
+            '.js': 'application/javascript; charset=utf-8',
+            '.png': 'image/png',
+          };
+          res.writeHead(200, {
+            'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+            'Access-Control-Allow-Origin': '*',
+          });
+          return res.end(fs.readFileSync(filePath));
+        }
+      }
+
+      // 0.2 App Store / Google Play 審查必備：隱私權政策與服務協議
+      if ((pathname === '/privacy' || pathname === '/terms') && method === 'GET') {
+        const isPrivacy = pathname === '/privacy';
+        const docTitle = isPrivacy ? '平台隱私權保護政策 (Privacy Policy)' : '使用者服務與快遞媒合協議 (Terms of Service)';
+        const docBody = isPrivacy
+          ? '本平台依法保護用戶個人資料。收集資訊包含：手機號碼（用於雙重 OTP 驗證）、位置座標（用於時空走廊順路比對）、驗視存證照片（用於開箱合規檢驗）。所有資料均採傳輸加密與最小權限原則管理。'
+          : '本平台提供大眾交通與私家載具順路捎帶快遞媒合服務。旅人與寄件人均需遵循違禁品法令規範，所有交易由平台資金託管（Escrow）系統保護，憑雙重動態 OTP 驗收解鎖。';
+        const legalHtml = `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${docTitle}</title><script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script></head><body class="bg-slate-900 text-slate-100 p-6 md:p-12 max-w-3xl mx-auto space-y-6"><div class="border-b border-slate-700 pb-4"><h1 class="text-2xl font-bold text-blue-400">${docTitle}</h1><p class="text-slate-400 text-sm mt-1">版本: 1.0.0 ｜ 生效日期: 2026年10月</p></div><div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 leading-relaxed text-slate-300 space-y-4"><p>${docBody}</p><p class="text-xs text-slate-400">專為 Google Play 與 Apple App Store 行動應用程式合規審查設置。</p></div><a href="/" class="inline-block text-blue-400 hover:underline text-sm">← 返回順路快遞平台</a></body></html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(legalHtml);
       }
 
       // 1. 健康檢查
