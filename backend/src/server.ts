@@ -340,10 +340,16 @@ export function createServer(): http.Server {
 // 若直接執行此檔案
 if (process.argv[1] && (process.argv[1].endsWith('server.ts') || process.argv[1].endsWith('server.js') || process.env.NODE_ENV === 'production')) {
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-  const HOST = process.env.HOST || '0.0.0.0';
+  const HOST = process.env.HOST;
   const server = createServer();
-  server.listen(PORT, HOST, () => {
-    console.log(`🚀 Multi-Modal Courier Platform API running on http://${HOST}:${PORT}`);
-  });
+  if (HOST) {
+    server.listen(PORT, HOST, () => {
+      console.log(`🚀 Multi-Modal Courier Platform API running on http://${HOST}:${PORT}`);
+    });
+  } else {
+    server.listen(PORT, () => {
+      console.log(`🚀 Multi-Modal Courier Platform API running on http://localhost:${PORT}`);
+    });
+  }
 }
 
