@@ -10,7 +10,7 @@ export interface PricingInput {
 
 export class PricingEngine {
   /**
-   * 依據運輸工具、距離、重量與申報價值計算階梯費用分帳
+   * 依據運輸工具、距離、重量與申報價值計算階梯費用分帳 (支援 10 大運具)
    */
   public static calculateQuote(input: PricingInput): PricingQuote {
     let baseFare = 0;
@@ -28,6 +28,15 @@ export class PricingEngine {
         weightFee = Math.max(0, weightKg - 1) * 10;
         distanceFee = Math.max(0, distanceKm - 1) * 15;
         commissionRate = 0.12;
+        break;
+
+      case 'BICYCLE':
+        // 腳踏車 / YouBike 2.0 綠色順路捎帶：市區 1~5km 短距通勤送件，享有綠色低碳 12% 平台優惠抽成
+        baseFare = 60; // 基礎起跳價 (涵蓋前 2km 及 2kg 隨身置物籃空間)
+        weightFee = Math.max(0, weightKg - 2) * 8; // 超過 2kg 每公斤 +$8 TWD (上限 5kg)
+        distanceFee = Math.max(0, distanceKm - 2) * 8; // 超過 2km 每公里 +$8 TWD
+        insuranceFee = Math.round(declaredValueTwd * 0.01);
+        commissionRate = 0.12; // 綠色低碳優惠抽成
         break;
 
       case 'MOTORCYCLE':
@@ -68,11 +77,21 @@ export class PricingEngine {
         commissionRate = 0.18;
         break;
 
+      case 'DOMESTIC_FLIGHT':
+        // 國內航空：松山/台中/高雄 飛 澎湖馬公、金門、台東、花蓮、馬祖 (40~60分鐘極速跨島)
+        baseFare = 480; // 包含前 2kg 隨身手提空間
+        weightFee = Math.max(0, weightKg - 2) * 120; // 國內線超重每公斤補貼 +$120 TWD
+        distanceFee = 150; // 離島跨海航線補貼
+        customsFee = 0; // 國內航線免海關報關費
+        insuranceFee = Math.round(declaredValueTwd * 0.02);
+        commissionRate = 0.15;
+        break;
+
       case 'FLIGHT':
         // 國際航班：以行李箱空間與重量分潤為主力，補貼廉航機票或超重費
         baseFare = 800; // 包含第 1 kg 與隨身手提空間
         weightFee = Math.max(0, weightKg - 1) * 400; // 每多 1kg +$400 TWD
-        distanceFee = 0; // 航空以航程公斤為主
+        distanceFee = 0; // 國際航空以航程公斤為主
         customsFee = 200; // 報關與安全申報合規處理費
         insuranceFee = Math.round(declaredValueTwd * 0.03); // 國際保價 3%
         commissionRate = 0.20;

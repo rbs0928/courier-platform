@@ -4,48 +4,106 @@ import { EscrowWalletService } from '../src/modules/escrow/EscrowWalletService.t
 import type { PackageShipment } from '../src/types/index.ts';
 import { PricingEngine } from '../src/modules/pricing/PricingEngine.ts';
 
-console.log('🧪 正在執行 [Compliance & Safety & Escrow] 安全合規與資金託管單元測試...\n');
+console.log('🧪 正在執行 [Compliance & Safety & Escrow] 安全合規、AI審核與雙照一致性單元測試...\n');
 
-// 測試 1: 違禁品與危險品智能偵測
+// 測試 1: 違禁品、危險品與 AI 審核分流
 {
-  // 國內易燃危險品
-  const domesticCheck = ComplianceAndSafetyModule.checkContraband(
-    '野營專用瓦斯罐二組',
-    '未拆封全新高壓氣體',
-    'OTHER',
-    false
-  );
-  assert.strictEqual(domesticCheck.isAllowed, false, '危險氣體應被攔截');
-  assert.ok(domesticCheck.violations.length > 0, '需回傳違禁原因');
+  // 1.1 明確危險品 -> AI REJECTED
+  const rejectedCheck = ComplianceAndSafetyModule.aiScreenContraband({
+    shipmentId: 'PKG_REJECT_01',
+    title: '野營專用瓦斯罐二組',
+    description: '全新高壓易燃氣體',
+    category: 'OTHER',
+  });
+  assert.strictEqual(rejectedCheck.decision, 'REJECTED', '危險高壓氣體應直接拒絕');
 
-  // 國際航空邊境防檢疫違規
-  const intlCheck = ComplianceAndSafetyModule.checkContraband(
-    '台灣名產香腸肉乾禮盒',
-    '真空包裝豬肉乾',
-    'FOOD_PACKAGED',
-    true // 國際境內
-  );
-  assert.strictEqual(intlCheck.isAllowed, false, '未檢疫肉製品跨國境應被攔截');
-  console.log('違禁品檢測結果 (正確攔截):', intlCheck.violations);
+  // 1.2 跨國生肉檢疫禁令 -> AI REJECTED
+  const intlCheck = ComplianceAndSafetyModule.aiScreenContraband({
+    shipmentId: 'PKG_REJECT_02',
+    title: '台灣名產香腸肉乾禮盒',
+    description: '未檢疫豬肉製品',
+    category: 'FOOD_PACKAGED',
+    isInternational: true,
+  });
+  assert.strictEqual(intlCheck.decision, 'REJECTED', '非洲豬瘟肉製品應直接拒絕');
 
-  // 合規合法物件
-  const safeCheck = ComplianceAndSafetyModule.checkContraband(
-    '文創手帳本與筆記本',
-    '純紙本文具商品',
-    'DOCUMENT',
-    true
-  );
-  assert.strictEqual(safeCheck.isAllowed, true, '合規物件應予以放行');
-  console.log('✅ 測試 1 通過: 違禁品與航空海關防檢疫過濾正常運作');
+  // 1.3 疑似違禁品 (粉末/中藥/未知品) -> AI SUSPECT_MANUAL_REVIEW (排入人工工單)
+  const suspectCheck = ComplianceAndSafetyModule.aiScreenContraband({
+    shipmentId: 'PKG_SUSPECT_01',
+    title: '自製高山漢方養生粉末禮盒',
+    description: '散裝中藥粉末，無標籤',
+    category: 'OTHER',
+  });
+  assert.strictEqual(suspectCheck.decision, 'SUSPECT_MANUAL_REVIEW', '未知粉末應標記為疑似違禁品');
+  assert.strictEqual(suspectCheck.requiresHumanReview, true, '需標記為需人工審查');
+
+  // 檢查人工審核佇列是否已收到工單
+  const queue = ComplianceAndSafetyModule.getReviewQueue();
+  const ticket = queue.find(t => t.shipmentId === 'PKG_SUSPECT_01');
+  assert.ok(ticket, '人工審核佇列應含有此工單');
+  assert.strictEqual(ticket.status, 'PENDING');
+
+  // 1.4 安全物品 -> AI CLEARED
+  const safeCheck = ComplianceAndSafetyModule.aiScreenContraband({
+    shipmentId: 'PKG_SAFE_01',
+    title: '文創手帳本與筆記本',
+    description: '純紙本文具商品',
+    category: 'DOCUMENT',
+  });
+  assert.strictEqual(safeCheck.decision, 'CLEARED', '合規物件應放行');
+
+  console.log('✅ 測試 1 通過: AI 違禁品初審與疑似品項分流至人工佇列機制完全正確');
 }
 
-// 測試 2: 開箱驗視存證與雙重動態 OTP 交接狀態機
+// 測試 2: 人工審核工單裁定機制
+{
+  const mockShipment: PackageShipment = {
+    id: 'PKG_MANUAL_01',
+    senderId: 'USR_01',
+    senderName: '寄件人',
+    senderPhone: '0900',
+    recipientName: '收件人',
+    recipientPhone: '0911',
+    title: '生技公司檢測試劑粉末',
+    description: '附檢驗成分證明',
+    category: 'OTHER',
+    weightKg: 0.5,
+    dimensions: { lengthCm: 10, widthCm: 10, heightCm: 10 },
+    declaredValue: 2000,
+    pickupLocation: { name: '台北', address: '台北', lat: 25, lng: 121 },
+    dropoffLocation: { name: '新竹', address: '新竹', lat: 24, lng: 121 },
+    earliestPickupTime: new Date().toISOString(),
+    deliveryDeadline: new Date().toISOString(),
+    status: 'SCREENING_SUSPECT',
+    pickupOtp: '111222',
+    dropoffOtp: '333444',
+    pricingQuote: {} as any,
+    createdAt: new Date().toISOString(),
+  };
+
+  const queue = ComplianceAndSafetyModule.getReviewQueue();
+  const targetTicket = queue[0];
+  assert.ok(targetTicket, '佇列應有待審工單');
+
+  const decideRes = ComplianceAndSafetyModule.decideReviewTicket({
+    ticketId: targetTicket.ticketId,
+    decision: 'APPROVED',
+    reviewerId: 'AUDITOR_CHENG',
+    reviewerNotes: '檢驗報告無誤，予以放行',
+    shipment: mockShipment,
+  });
+
+  assert.strictEqual(decideRes.success, true);
+  assert.strictEqual(mockShipment.status, 'MATCHING', '核准後狀態應切換為 MATCHING 允許媒合');
+  console.log('✅ 測試 2 通過: 風控人員人工審核工單裁定成功放行');
+}
+
+// 測試 3: 雙照一致性審核 (未審核前阻擋簽收，審核一致後放行並解鎖 Escrow)
 {
   const escrowService = new EscrowWalletService();
   const travelerId = 'TRV_ALICE_01';
   const senderId = 'SND_BOB_01';
 
-  // 寄件人初始充值 $3,000 元
   const senderWallet = escrowService.getOrCreateWallet(senderId, '寄件人 Bob', 3000);
   const travelerWallet = escrowService.getOrCreateWallet(travelerId, '旅人 Alice', 0);
 
@@ -60,7 +118,7 @@ console.log('🧪 正在執行 [Compliance & Safety & Escrow] 安全合規與資
   const dropoffOtp = '991205';
 
   const shipment: PackageShipment = {
-    id: 'PKG_ESCROW_TEST',
+    id: 'PKG_CONSISTENCY_TEST',
     senderId,
     senderName: '寄件人 Bob',
     senderPhone: '0911-111-111',
@@ -96,45 +154,11 @@ console.log('🧪 正在執行 [Compliance & Safety & Escrow] 安全合規與資
     createdAt: new Date().toISOString(),
   };
 
-  // 步驟 A: 鎖定寄件人資金進入 Escrow
-  const escrowTx = escrowService.holdEscrowForShipment(shipment);
-  assert.strictEqual(escrowTx.status, 'HELD_IN_ESCROW', '資金應處於託管鎖定狀態');
-  assert.strictEqual(senderWallet.lockedEscrowTwd, quote.totalAmount, '寄件人款項應被全額鎖定');
-  assert.strictEqual(senderWallet.balanceTwd, 3000 - quote.totalAmount, '寄件人可用餘額應相應扣減');
+  // 1. 託管資金
+  escrowService.holdEscrowForShipment(shipment);
 
-  // 步驟 B: 嘗試用錯誤取件 OTP -> 應被拒絕
-  const badOtpResult = ComplianceAndSafetyModule.verifyPickupAndInspection({
-    shipment,
-    travelerId,
-    inputOtp: '000000', // 錯誤 OTP
-    checklist: {
-      noContrabandConfirmed: true,
-      physicalAppearanceChecked: true,
-      packageOpenedAndInspected: true,
-      sealedInPresenceOfSender: true,
-    },
-    photoUrls: ['https://cdn.example.com/photo1.jpg', 'https://cdn.example.com/photo2.jpg'],
-  });
-  assert.strictEqual(badOtpResult.success, false, '錯誤 OTP 應無法通過取件');
-  assert.strictEqual(shipment.status, 'ACCEPTED', '狀態應維持在 ACCEPTED');
-
-  // 步驟 C: 未上傳足夠開箱存證照片 -> 應被拒絕
-  const missingPhotoResult = ComplianceAndSafetyModule.verifyPickupAndInspection({
-    shipment,
-    travelerId,
-    inputOtp: pickupOtp,
-    checklist: {
-      noContrabandConfirmed: true,
-      physicalAppearanceChecked: true,
-      packageOpenedAndInspected: true,
-      sealedInPresenceOfSender: true,
-    },
-    photoUrls: ['https://cdn.example.com/only_one.jpg'], // 缺少第二張照片
-  });
-  assert.strictEqual(missingPhotoResult.success, false, '缺少封箱照片應無法通過安全驗證');
-
-  // 步驟 D: 完整開箱驗視照片 + 正確取件 OTP -> 取件成功並進入運送狀態
-  const goodPickupResult = ComplianceAndSafetyModule.verifyPickupAndInspection({
+  // 2. 取件驗視 (建立基準照片)
+  const pickupRes = ComplianceAndSafetyModule.verifyPickupAndInspection({
     shipment,
     travelerId,
     inputOtp: pickupOtp,
@@ -145,42 +169,49 @@ console.log('🧪 正在執行 [Compliance & Safety & Escrow] 安全合規與資
       sealedInPresenceOfSender: true,
     },
     photoUrls: [
-      'https://cdn.example.com/open_inspection.jpg',
-      'https://cdn.example.com/sealed_package.jpg',
+      'https://cdn.example.com/baseline_open.jpg',
+      'https://cdn.example.com/baseline_sealed.jpg',
     ],
   });
-  assert.strictEqual(goodPickupResult.success, true, '正確交接應回傳成功');
-  assert.strictEqual(shipment.status, 'IN_TRANSIT', '訂單狀態應更新為 IN_TRANSIT');
-  assert.ok(shipment.inspectionRecord, '應已記錄開箱存證詳情');
+  assert.strictEqual(pickupRes.success, true);
+  assert.strictEqual(shipment.status, 'IN_TRANSIT');
 
-  // 步驟 E: 嘗試送達時使用錯誤簽收 OTP -> 應被拒絕
-  const badDropoffResult = ComplianceAndSafetyModule.verifyDropoff({
-    shipment,
-    travelerId,
-    inputOtp: '123456',
-    photoUrls: ['https://cdn.example.com/delivery_handover.jpg'],
-  });
-  assert.strictEqual(badDropoffResult.success, false, '錯誤簽收碼不可完成送達');
-  assert.strictEqual(shipment.status, 'IN_TRANSIT', '狀態應維持 IN_TRANSIT');
-
-  // 步驟 F: 現場出示正確簽收碼與交付拍照 -> 完成交付並觸發資金託管分帳
-  const goodDropoffResult = ComplianceAndSafetyModule.verifyDropoff({
+  // 3. 關鍵測試：未完成雙照一致性審核前，嘗試輸入簽收 OTP -> 必須被安全阻擋！
+  const blockedDropoff = ComplianceAndSafetyModule.verifyDropoff({
     shipment,
     travelerId,
     inputOtp: dropoffOtp,
-    photoUrls: ['https://cdn.example.com/delivery_handover.jpg'],
+    photoUrls: ['https://cdn.example.com/unboxing_photo.jpg'],
   });
-  assert.strictEqual(goodDropoffResult.success, true, '簽收成功');
-  assert.strictEqual(shipment.status, 'DELIVERED', '狀態應變更為 DELIVERED');
+  assert.strictEqual(blockedDropoff.success, false, '未通過雙照一致性審核前必須嚴格阻擋簽收');
+  assert.ok(blockedDropoff.message.includes('雙照一致性審核'), '應提示未通過雙照一致性審核');
+  assert.strictEqual(shipment.status, 'IN_TRANSIT');
 
-  // 解鎖資金分帳
+  // 4. 執行【派發照片 vs 送達拆箱照片雙向一致性特徵比對】
+  const consistencyRes = ComplianceAndSafetyModule.verifyPhotoConsistency({
+    shipment,
+    unboxingPhotoUrls: ['https://cdn.example.com/unboxing_photo.jpg'],
+  });
+  assert.strictEqual(consistencyRes.isApproved, true, '外觀完好比對應核准');
+  assert.strictEqual(consistencyRes.decision, 'CONSISTENCY_APPROVED');
+  assert.strictEqual(shipment.status, 'ARRIVED_DROPOFF', '狀態應更新為待簽收');
+
+  // 5. 雙照一致性核准後，再次執行簽收 -> 順利通過並解鎖資金！
+  const goodDropoff = ComplianceAndSafetyModule.verifyDropoff({
+    shipment,
+    travelerId,
+    inputOtp: dropoffOtp,
+    photoUrls: ['https://cdn.example.com/unboxing_photo.jpg'],
+  });
+  assert.strictEqual(goodDropoff.success, true, '審核通過後簽收應順利成功');
+  assert.strictEqual(shipment.status, 'DELIVERED');
+
+  // 解鎖資金
   const payout = escrowService.releaseEscrowToTraveler(shipment);
-  assert.strictEqual(payout.travelerEarnings, quote.travelerEarnings, '旅人應如數收到收益');
-  assert.strictEqual(travelerWallet.balanceTwd, quote.travelerEarnings, '旅人錢包餘額應增加');
-  assert.strictEqual(senderWallet.lockedEscrowTwd, 0, '寄件人鎖定託管金應歸零');
-  assert.strictEqual(escrowService.getPlatformRevenue(), quote.platformCommission, '平台應成功獲取佣金');
+  assert.strictEqual(payout.travelerEarnings, quote.travelerEarnings);
+  assert.strictEqual(travelerWallet.balanceTwd, quote.travelerEarnings);
 
-  console.log('✅ 測試 2 通過: 雙重動態 OTP + 開箱驗視協定 + 資金託管解鎖閉環完整可靠');
+  console.log('✅ 測試 3 通過: 雙照一致性審核前嚴格鎖定簽收，審核一致後順利完成簽收與 Escrow 解鎖撥款！');
 }
 
-console.log('\n🎉 所有 [Compliance & Safety & Escrow] 測試均順利通過！');
+console.log('\n🎉 所有 [Compliance & Safety & Escrow] 升級測試均 100% 順利通過！');

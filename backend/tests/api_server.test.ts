@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import http from 'node:http';
 import { createServer } from '../src/server.ts';
 
-console.log('🧪 正在執行 [API Server] 整合端點測試...\n');
+console.log('🧪 正在執行 [API Server] 整合端點測試 (含法規庫、Google Maps、AI審核與雙照一致性)...\n');
 
 const server = createServer();
 const TEST_PORT = 3199;
@@ -22,25 +22,25 @@ server.listen(TEST_PORT, async () => {
     const hubsRes = await fetch(`${baseUrl}/api/hubs`);
     const hubsJson = await hubsRes.json();
     assert.strictEqual(hubsRes.status, 200);
-    assert.ok(hubsJson.data.length > 0, '應返回樞紐站點清單');
-    console.log(`✅ GET /api/hubs 通過 (共 ${hubsJson.data.length} 個大眾運輸/航空樞紐)`);
+    assert.ok(hubsJson.data.length >= 13, '應返回包含國內機場與自行車站點的樞紐清單');
+    console.log(`✅ GET /api/hubs 通過 (共 ${hubsJson.data.length} 個大眾運輸/國內航空/單車樞紐)`);
 
-    // 3. 測試 /api/quote 報價試算
+    // 3. 測試 /api/quote 報價試算 (含腳踏車與國內航空)
     const quoteRes = await fetch(`${baseUrl}/api/quote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        transportMode: 'HSR',
+        transportMode: 'DOMESTIC_FLIGHT',
         distanceKm: 300,
         weightKg: 2,
-        declaredValueTwd: 10000,
+        declaredValueTwd: 5000,
       }),
     });
     const quoteJson = await quoteRes.json();
     assert.strictEqual(quoteRes.status, 200);
-    assert.strictEqual(quoteJson.data.transportMode, 'HSR');
+    assert.strictEqual(quoteJson.data.transportMode, 'DOMESTIC_FLIGHT');
     assert.ok(quoteJson.data.travelerEarnings > 0);
-    console.log('✅ POST /api/quote 通過 (試算高鐵報價成功)');
+    console.log('✅ POST /api/quote 通過 (試算國內航空離島報價成功)');
 
     // 4. 測試 /api/matching/shipments/:id 時空走廊媒合
     const matchRes = await fetch(`${baseUrl}/api/matching/shipments/PKG_HSR_01`);
@@ -49,20 +49,34 @@ server.listen(TEST_PORT, async () => {
     assert.ok(matchJson.totalMatches >= 1, '應成功媒合到高鐵商務客行程');
     console.log(`✅ GET /api/matching/shipments/:id 通過 (媒合命中 ${matchJson.totalMatches} 筆旅人行程)`);
 
-    // 5. 測試違禁品攔截防禦
+    // 5. 測試 AI 違禁品攔截防禦
     const contrabandRes = await fetch(`${baseUrl}/api/shipments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: '生鮮黑豬肉火腿',
+        title: '生鮮黑豬肉香腸火腿',
         description: '真空生肉',
         isInternational: true,
       }),
     });
     const contrabandJson = await contrabandRes.json();
     assert.strictEqual(contrabandRes.status, 400);
-    assert.strictEqual(contrabandJson.error, 'CONTRABAND_DETECTED');
-    console.log('✅ POST /api/shipments 違禁品防護攔截通過');
+    assert.strictEqual(contrabandJson.error, 'CONTRABAND_REJECTED');
+    console.log('✅ POST /api/shipments 違禁品 AI 防護直接攔截通過');
+
+    // 6. 測試 /api/compliance/regulations 航空各國法規庫
+    const regsRes = await fetch(`${baseUrl}/api/compliance/regulations`);
+    const regsJson = await regsRes.json();
+    assert.strictEqual(regsRes.status, 200);
+    assert.ok(regsJson.data.length >= 5, '應包含 IATA DGR, ICAO, 台灣 CAA, 日本稅關等權威法規');
+    console.log(`✅ GET /api/compliance/regulations 通過 (共 ${regsJson.data.length} 條權威航空海關法規)`);
+
+    // 7. 測試 /api/maps/places/autocomplete Google Maps 地點自動完成整合
+    const mapsRes = await fetch(`${baseUrl}/api/maps/places/autocomplete?input=台北車站`);
+    const mapsJson = await mapsRes.json();
+    assert.strictEqual(mapsRes.status, 200);
+    assert.ok(mapsJson.data.length > 0, '應成功返回 Google Places 建議候選');
+    console.log(`✅ GET /api/maps/places/autocomplete 通過 (搜尋命中 ${mapsJson.data.length} 處地點)`);
 
     console.log('\n🎉 所有 [API Server] 整合測試均順利通過！');
   } catch (err) {
