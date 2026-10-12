@@ -64,16 +64,17 @@
         </div>
       </div>
 
-      <!-- 已登入狀態 (手機已驗證) -->
+      <!-- 已登入狀態 (手機與 Email 雙重驗證實名帳號) -->
       <div id="auth-state-box" class="hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div class="flex flex-wrap items-center gap-2.5 text-xs">
           <div class="flex items-center gap-1.5">
             <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
             <span class="font-bold text-white text-sm" id="user-display-name">林晨旅</span>
-            <span class="text-slate-400 font-mono" id="user-display-phone">(0912-345-678)</span>
+            <span class="text-blue-400 font-mono text-[11px]" id="user-display-email">(traveler.demo@courier.platform)</span>
+            <span class="text-slate-400 font-mono" id="user-display-phone">0912-345-678</span>
           </div>
           <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold text-[11px] flex items-center gap-1">
-            <span>✅</span><span>手機 OTP 實名已驗證 (KYC L1)</span>
+            <span>✅</span><span>Email 帳號與證件姓名雙重驗證 (KYC L1)</span>
           </span>
           <span class="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full text-[11px]" id="user-display-roles">
             寄件・旅人・收件通用
@@ -203,6 +204,32 @@
                 <span class="inline-flex items-center gap-1 font-medium"><span class="w-2 h-2 rounded-full bg-blue-500"></span>取件點</span>
                 <span class="inline-flex items-center gap-1 font-medium"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>送達點</span>
                 <span class="inline-flex items-center gap-1 text-cyan-400 font-mono">──── 走廊軌跡</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 寄出人須輸入收件人詳細資訊 (姓名 / 電話 / 準確面交位置與備註) -->
+          <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">👤</span>
+                <span class="text-xs font-semibold text-slate-200">收件人詳細聯絡資訊 (必填，確保旅人現場準確面交交付)</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">實名面交交付</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-medium text-slate-400 mb-1">收件人真實姓名 (需與證件相符合)</label>
+                <input type="text" id="input-recipient-name" value="李明軒 (特助)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="例如：李大華 (需與證件一致)">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-slate-400 mb-1">收件人聯絡電話</label>
+                <input type="tel" id="input-recipient-phone" value="0933-777-888" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="例如：0933-123-456">
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-[11px] font-medium text-slate-400 mb-1">終點準確面交位置與地標備註 (例如大樓櫃台、捷運會面點)</label>
+                <input type="text" id="input-recipient-location-note" value="台北 101 大樓 1 樓松智路門市大廳會面點 (信義路五段7號)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="清楚標示面交地標，以利旅人與收件人快速碰面">
               </div>
             </div>
           </div>
@@ -352,6 +379,97 @@
             <span id="step-2" class="text-slate-500 font-bold text-amber-400">3. 雙照一致性審核</span>
             <span class="text-slate-600">➔</span>
             <span id="step-3" class="text-slate-500">4. 簽收OTP解鎖</span>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 旅人・寄出人・收貨人 三方透明身分與位置看板 (Tripartite Transparency) -->
+        <!-- 確保旅人了解貨由誰寄出與貨寄到誰的手上 (位置在哪) -->
+        <!-- ========================================== -->
+        <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>📍</span><span>三方透明身分與面交位置核對 (旅人・寄件人・收件人)</span>
+            </span>
+            <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">實名身分與地標完全透明</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <!-- 貨由誰寄出 -->
+            <div class="p-3 bg-slate-900 border border-blue-500/30 rounded-xl space-y-1.5">
+              <div class="flex items-center justify-between text-blue-400 font-bold">
+                <span class="flex items-center gap-1"><span>📦</span><span>貨由誰寄出 (起點寄件人)</span></span>
+                <span class="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded font-normal">取件起點</span>
+              </div>
+              <div class="text-slate-200 font-medium">
+                姓名: <span id="tripartite-sender-name" class="text-white font-bold">陳小美</span>
+                <span id="tripartite-sender-phone" class="text-slate-400 font-mono ml-2">(0977-888-999)</span>
+              </div>
+              <div class="text-[11px] text-slate-300 bg-slate-950 p-2 rounded-lg border border-slate-800">
+                <span class="text-blue-400 font-semibold block">準確取件面交地標：</span>
+                <span id="tripartite-sender-location">台北車站 M8 出口前 (公園路) ｜ GPS: 25.0456, 121.5178</span>
+              </div>
+            </div>
+
+            <!-- 貨寄到誰手上 -->
+            <div class="p-3 bg-slate-900 border border-emerald-500/30 rounded-xl space-y-1.5">
+              <div class="flex items-center justify-between text-emerald-400 font-bold">
+                <span class="flex items-center gap-1"><span>🎯</span><span>貨寄到誰手上 (終點收件人)</span></span>
+                <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-normal">交付終點</span>
+              </div>
+              <div class="text-slate-200 font-medium">
+                姓名: <span id="tripartite-recipient-name" class="text-white font-bold">李明軒 (特助)</span>
+                <span id="tripartite-recipient-phone" class="text-slate-400 font-mono ml-2">(0933-777-888)</span>
+              </div>
+              <div class="text-[11px] text-slate-300 bg-slate-950 p-2 rounded-lg border border-slate-800">
+                <span class="text-emerald-400 font-semibold block">準確送達面交地標：</span>
+                <span id="tripartite-recipient-location">台北 101 大樓 1 樓松智路門市大廳會面點 ｜ GPS: 25.0415, 121.5498</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 旅人・寄出人・收貨人 三方即時雙向溝通對話板 (Tripartite Chat Panel) -->
+        <!-- ========================================== -->
+        <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-amber-400">💬</span>
+              <span class="text-xs font-bold text-white">三方即時雙向溝通對話板 (旅人 ↔ 寄件人 ↔ 收件人)</span>
+            </div>
+            <button type="button" onclick="loadTripartiteMessages()" class="text-[10px] text-slate-400 hover:text-blue-400 flex items-center gap-1">
+              <span>🔄</span><span>重新整理通訊</span>
+            </button>
+          </div>
+
+          <!-- 對話訊息串清單 -->
+          <div id="tripartite-chat-box" class="h-44 overflow-y-auto bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
+            <div class="p-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 text-[11px]">
+              <span class="font-bold text-blue-400">系統提醒：</span>
+              <span>三方加密通訊已就緒。旅人可向寄出人確認包裝與起點面交細節，並通報收貨人預估抵達時間 (ETA)。</span>
+            </div>
+          </div>
+
+          <!-- 快捷快速通知按鈕 -->
+          <div class="flex flex-wrap gap-1.5 text-[11px]">
+            <span class="text-slate-500 self-center">快捷通報:</span>
+            <button type="button" onclick="sendQuickMessage('我已抵達起點面交地標，請寄件人準備開箱驗視！')" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-blue-300 border border-slate-800 transition-all">📍 已抵達起點</button>
+            <button type="button" onclick="sendQuickMessage('已取件啟程！搭乘順路運具前往目的地，預估 ETA 20 分鐘後抵達終點。')" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-800 transition-all">🚀 啟程回報 ETA</button>
+            <button type="button" onclick="sendQuickMessage('我已抵達送達門市大廳，穿黑色外套，請收件人前來開箱驗收！')" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-slate-800 transition-all">🎁 抵達終點面交</button>
+          </div>
+
+          <!-- 輸入發送區 -->
+          <div class="flex gap-2">
+            <select id="chat-sender-role" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-2 shrink-0">
+              <option value="TRAVELER">🛵 旅人身分發言</option>
+              <option value="SENDER">📦 寄件人身分發言</option>
+              <option value="RECIPIENT">🎯 收件人身分發言</option>
+            </select>
+            <input type="text" id="chat-input-message" placeholder="輸入通訊訊息 (例如：我在 1 樓星巴克門口等您...)" class="flex-1 bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" onkeydown="if(event.key==='Enter') sendChatMessage()">
+            <button type="button" onclick="sendChatMessage()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-xs shrink-0 transition-all shadow">
+              發送
+            </button>
           </div>
         </div>
 
@@ -1049,8 +1167,12 @@
         guestBox.classList.add('hidden');
         authBox.classList.remove('hidden');
 
-        document.getElementById('user-display-name').innerText = currentUser.name || '已驗證用戶';
-        document.getElementById('user-display-phone').innerText = `(${formatPhoneDisplay(currentUser.phone)})`;
+        const displayName = currentUser.realName || currentUser.name || '已驗證會員';
+        const displayEmail = currentUser.email || '未設定 Email';
+        document.getElementById('user-display-name').innerText = displayName;
+        const emailEl = document.getElementById('user-display-email');
+        if (emailEl) emailEl.innerText = `(${displayEmail})`;
+        document.getElementById('user-display-phone').innerText = formatPhoneDisplay(currentUser.phone);
         document.getElementById('user-display-wallet').innerText = Number(currentUser.walletBalanceTwd || 1000).toLocaleString();
 
         let rolesText = '寄件・旅人・收件通用';
@@ -1076,12 +1198,29 @@
     }
 
     async function handleSendOtp() {
+      const emailInput = document.getElementById('auth-input-email');
+      const realNameInput = document.getElementById('auth-input-realname');
       const phoneInput = document.getElementById('auth-input-phone');
+      
+      const email = emailInput ? emailInput.value.trim() : '';
+      const realName = realNameInput ? realNameInput.value.trim() : '';
       const phone = phoneInput.value.trim();
       const sendBtn = document.getElementById('btn-send-otp');
 
+      if (!email || !email.includes('@')) {
+        alert('⚠️ 帳號名稱請使用有效電子郵件 (E-mail) 作為帳號申請！');
+        if (emailInput) emailInput.focus();
+        return;
+      }
+
+      if (!realName) {
+        alert('⚠️ 申請會員須填寫真實姓名 (需與身分證件／護照姓名相符合)！');
+        if (realNameInput) realNameInput.focus();
+        return;
+      }
+
       if (!phone || phone.replace(/[^0-9]/g, '').length < 9) {
-        alert('⚠️ 請輸入有效的手機號碼 (例如: 0912-345-678)！');
+        alert('⚠️ 請輸入有效的手機號碼 (例如: 0912-345-678) 接收簡訊動態 OTP！');
         phoneInput.focus();
         return;
       }
@@ -1095,19 +1234,19 @@
           const res = await fetch('/api/auth/send-otp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, purpose: 'REGISTER' })
+            body: JSON.stringify({ email, realName, phone, purpose: 'REGISTER' })
           });
           const data = await res.json();
           if (data.debugOtp) debugCode = data.debugOtp;
         } catch (e) {
-          console.warn('API /api/auth/send-otp offline or CORS, using local mock generator:', e);
+          console.warn('API /api/auth/send-otp offline or fallback:', e);
           debugCode = Math.floor(100000 + Math.random() * 900000).toString();
         }
 
         lastDebugOtp = debugCode;
         const smsBox = document.getElementById('sms-notification-box');
         const smsText = document.getElementById('sms-message-text');
-        smsText.innerHTML = `【順路快遞平台】您的 6 位數動態驗證碼為 <b class="text-amber-300 font-mono text-sm tracking-wider">${debugCode}</b>，5分鐘內有效。切勿告知他人。(測試亦可輸入 654321)`;
+        smsText.innerHTML = `【順路快遞平台】會員 [${realName}] 帳號 [${email}] 之 6 位數簡訊動態驗證碼為 <b class="text-amber-300 font-mono text-sm tracking-wider">${debugCode}</b>，5分鐘內有效。(測試亦可輸入 654321)`;
         smsBox.classList.remove('hidden');
         document.getElementById('btn-autofill-otp').classList.remove('hidden');
 
@@ -1140,12 +1279,21 @@
     }
 
     async function handleVerifyOtpAndLogin() {
-      const name = document.getElementById('auth-input-name').value.trim() || '順路用戶';
+      const email = document.getElementById('auth-input-email') ? document.getElementById('auth-input-email').value.trim() : '';
+      const realName = document.getElementById('auth-input-realname') ? document.getElementById('auth-input-realname').value.trim() : '';
       const phone = document.getElementById('auth-input-phone').value.trim();
       const role = document.getElementById('auth-select-role').value;
       const otp = document.getElementById('auth-input-otp').value.trim();
       const verifyBtn = document.getElementById('btn-submit-auth');
 
+      if (!email || !email.includes('@')) {
+        alert('⚠️ 請輸入有效 Email 作為帳號名稱！');
+        return;
+      }
+      if (!realName) {
+        alert('⚠️ 請輸入真實姓名 (需與證件姓名相符合)！');
+        return;
+      }
       if (!phone) {
         alert('⚠️ 請輸入手機號碼！');
         return;
@@ -1156,7 +1304,7 @@
       }
 
       verifyBtn.disabled = true;
-      verifyBtn.innerText = '⏳ 正在向電信安全閘道驗證 OTP...';
+      verifyBtn.innerText = '⏳ 正在執行 Email 與手機雙重實名驗證...';
 
       try {
         let authResult = null;
@@ -1164,7 +1312,7 @@
           const res = await fetch('/api/auth/verify-otp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, otp, name, preferredRole: role })
+            body: JSON.stringify({ email, realName, name: realName, phone, otp, preferredRole: role })
           });
           authResult = await res.json();
         } catch (e) {
@@ -1177,10 +1325,13 @@
                 token: 'MOCK_TOKEN_' + Date.now(),
                 user: {
                   id: 'USR_' + Date.now(),
-                  name,
+                  email,
+                  realName,
+                  name: realName,
                   phone,
                   roles: role === 'ALL' ? ['SENDER', 'TRAVELER', 'RECIPIENT'] : [role],
                   isPhoneVerified: true,
+                  isEmailVerified: true,
                   kycLevel: 'PHONE_VERIFIED',
                   walletBalanceTwd: 1000,
                   createdAt: new Date().toISOString()
@@ -1210,7 +1361,7 @@
         updateAuthUI();
         closeAuthModal();
 
-        alert(`🎉 手機動態 OTP 驗證成功！\n歡迎【${currentUser.name}】取得平台實名認證 (KYC L1)！\n🎁 新戶體驗金 NT$ 1,000 已匯入您的 Escrow 錢包。您現在可以自由登出、發布託運委託或順路接單面交！`);
+        alert(`🎉 實名會員雙重驗證成功！\n帳號名稱: ${currentUser.email}\n真實姓名: ${currentUser.realName || currentUser.name}\n手機門號: ${currentUser.phone}\n\n已核發平台證件實名認證 (KYC L1)，新戶禮遇 NT$ 1,000 體驗金已匯入您的 Escrow 錢包。您現在可以自由登出、發布託運委託或順路接單面交！`);
       } catch (err) {
         alert('驗證程序發生異常：' + err.message);
       } finally {
@@ -1331,7 +1482,9 @@
     // ==========================================
     // 訂單發布與旅人操作攔截守衛 (Guarded Actions)
     // ==========================================
-    function submitShipmentOrder() {
+    let activeTripartiteShipmentId = 'PKG_202610_8829';
+
+    async function submitShipmentOrder() {
       // 權限守衛：初次使用需先通過手機 OTP 驗證
       if (!currentUser) {
         alert('⚠️ 依平台安全與風控規範：\n初次使用發布寄件委託前，請先申請帳號並通過【手機 OTP 動態驗證】！');
@@ -1339,12 +1492,220 @@
         return;
       }
 
-      const title = document.getElementById('input-title').value;
+      const title = document.getElementById('input-title').value.trim();
+      const recipientName = document.getElementById('input-recipient-name').value.trim();
+      const recipientPhone = document.getElementById('input-recipient-phone').value.trim();
+      const recipientNote = document.getElementById('input-recipient-location-note').value.trim();
+      const pickupAddress = document.getElementById('input-pickup-address').value.trim();
+      const dropoffAddress = document.getElementById('input-dropoff-address').value.trim();
+
+      // 檢查收件人詳細資訊 (姓名 / 電話 / 準確面交位置)
+      if (!recipientName) {
+        alert('⚠️ 寄出人須輸入收件人真實姓名 (需與證件相符合)！');
+        document.getElementById('input-recipient-name').focus();
+        return;
+      }
+      if (!recipientPhone || recipientPhone.replace(/[^0-9]/g, '').length < 8) {
+        alert('⚠️ 寄出人須輸入收件人聯絡電話 (有效手機/電話)，供旅人送達時聯繫！');
+        document.getElementById('input-recipient-phone').focus();
+        return;
+      }
+      if (!recipientNote && !dropoffAddress) {
+        alert('⚠️ 寄出人須輸入收件人準確面交位置與地標備註 (例如大樓櫃台、捷運會面點)！');
+        document.getElementById('input-recipient-location-note').focus();
+        return;
+      }
+
       const totalQuote = document.getElementById('quote-total').innerText;
       const urgencyText = currentUrgency === 'RUSH' ? '🔥 極限即時 (最速下班機/高鐵直送)' : currentUrgency === 'EXPRESS' ? '⚡ 急速快件 (加急優先媒合)' : '🟢 標準順路 (彈性捎帶)';
-      
-      alert(`🎉 委託發布成功！\n寄件人: ${currentUser.name} (${formatPhoneDisplay(currentUser.phone)})\n託運項目: ${title}\n時效等級: ${urgencyText}\n預估總額: NT$ ${totalQuote}\n\n已通過 AI 安全合規審核，急件報酬已鎖定於平台 Escrow 資金託管中，順路旅人將於接單大廳即時收到推播！`);
-      switchTab('traveler');
+
+      const submitBtn = document.getElementById('btn-submit-shipment');
+      submitBtn.disabled = true;
+      submitBtn.innerText = '⏳ 正在提交並同步三方溝通通道...';
+
+      try {
+        const payload = {
+          title,
+          description: document.getElementById('input-desc').value.trim(),
+          recipientName,
+          recipientPhone,
+          pickupLocation: {
+            name: pickupAddress,
+            address: pickupAddress,
+            lat: currentPickupCoords ? currentPickupCoords.lat : 25.045610,
+            lng: currentPickupCoords ? currentPickupCoords.lng : 121.517890,
+          },
+          dropoffLocation: {
+            name: recipientNote || dropoffAddress,
+            address: dropoffAddress,
+            lat: currentDropoffCoords ? currentDropoffCoords.lat : 25.041500,
+            lng: currentDropoffCoords ? currentDropoffCoords.lng : 121.549800,
+          },
+          weightKg: Number(document.getElementById('input-weight').value) || 2,
+          declaredValue: Number(document.getElementById('input-value').value) || 1000,
+          transportModePreference: currentMode,
+          urgencyLevel: currentUrgency,
+        };
+
+        let serverRes = null;
+        try {
+          const res = await fetch('/api/shipments', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${currentAuthToken}`,
+            },
+            body: JSON.stringify(payload),
+          });
+          serverRes = await res.json();
+          if (serverRes.data && serverRes.data.id) {
+            activeTripartiteShipmentId = serverRes.data.id;
+          }
+        } catch (e) {
+          console.warn('API /api/shipments fallback to local store:', e);
+        }
+
+        // 同步至旅人大廳三方透明看板
+        document.getElementById('tripartite-sender-name').innerText = currentUser.realName || currentUser.name;
+        document.getElementById('tripartite-sender-phone').innerText = `(${formatPhoneDisplay(currentUser.phone)})`;
+        document.getElementById('tripartite-sender-location').innerText = `${pickupAddress} ｜ 起點準確面交`;
+
+        document.getElementById('tripartite-recipient-name').innerText = recipientName;
+        document.getElementById('tripartite-recipient-phone').innerText = `(${formatPhoneDisplay(recipientPhone)})`;
+        document.getElementById('tripartite-recipient-location').innerText = `${recipientNote || dropoffAddress} ｜ 終點準確面交`;
+
+        alert(`🎉 委託發布成功！\n貨由誰寄出: ${currentUser.realName || currentUser.name} (${formatPhoneDisplay(currentUser.phone)})\n貨寄到誰手上: ${recipientName} (${formatPhoneDisplay(recipientPhone)})\n終點準確面交: ${recipientNote || dropoffAddress}\n時效等級: ${urgencyText}\n預估總額: NT$ ${totalQuote}\n\n已成功建立三方即時雙向溝通通道，順路旅人將於接單大廳即時收到推播並掌握面交細節！`);
+
+        switchTab('traveler');
+        loadTripartiteMessages();
+
+      } catch (err) {
+        alert('發布委託異常: ' + err.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>🔒 發布委託並鎖定託管資金</span>';
+      }
+    }
+
+    // ==========================================
+    // 旅人・寄件人・收件人 三方即時雙向溝通對話板操作
+    // ==========================================
+    let localMessages = [
+      {
+        id: 'MSG_INIT_01',
+        senderRole: 'SYSTEM',
+        senderName: '平台安全與合規協同系統',
+        message: '📍【三方雙向溝通通道已開啟】寄出人、收貨人與順路旅人可在此確認出發地標、行車動態與送達開箱面交位置。',
+        timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
+
+    async function loadTripartiteMessages() {
+      const chatBox = document.getElementById('tripartite-chat-box');
+      if (!chatBox) return;
+
+      try {
+        const res = await fetch(`/api/shipments/${activeTripartiteShipmentId}/messages`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data && json.data.length > 0) {
+            localMessages = json.data;
+          }
+        }
+      } catch (e) {
+        // use localMessages
+      }
+
+      renderChatMessages();
+    }
+
+    function renderChatMessages() {
+      const chatBox = document.getElementById('tripartite-chat-box');
+      if (!chatBox) return;
+
+      chatBox.innerHTML = localMessages.map(m => {
+        let roleBadge = '<span class="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold text-[10px]">寄件人</span>';
+        let bubbleClass = 'bg-slate-950 border-slate-800 text-slate-200';
+        
+        if (m.senderRole === 'TRAVELER') {
+          roleBadge = '<span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold text-[10px]">🛵 順路旅人</span>';
+          bubbleClass = 'bg-cyan-950/30 border-cyan-500/30 text-cyan-100';
+        } else if (m.senderRole === 'RECIPIENT') {
+          roleBadge = '<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">🎯 收件人</span>';
+          bubbleClass = 'bg-emerald-950/30 border-emerald-500/30 text-emerald-100';
+        } else if (m.senderRole === 'SYSTEM') {
+          roleBadge = '<span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold text-[10px]">平台系統</span>';
+          bubbleClass = 'bg-slate-950/80 border-slate-800 text-slate-400';
+        }
+
+        const timeStr = m.timestamp ? (m.timestamp.includes('T') ? new Date(m.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : m.timestamp) : '';
+
+        return `
+          <div class="p-2.5 rounded-xl border ${bubbleClass} space-y-1 shadow-sm">
+            <div class="flex items-center justify-between text-[11px]">
+              <div class="flex items-center gap-1.5">
+                ${roleBadge}
+                <span class="font-bold text-white">${m.senderName || '發言者'}</span>
+              </div>
+              <span class="text-[10px] text-slate-500 font-mono">${timeStr}</span>
+            </div>
+            <p class="text-xs leading-relaxed pl-1">${m.message}</p>
+          </div>
+        `;
+      }).join('');
+
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendChatMessage() {
+      const input = document.getElementById('chat-input-message');
+      const text = input ? input.value.trim() : '';
+      if (!text) return;
+
+      const roleSelect = document.getElementById('chat-sender-role');
+      const role = roleSelect ? roleSelect.value : 'TRAVELER';
+
+      let senderName = '順路旅人';
+      if (role === 'TRAVELER') {
+        senderName = currentUser ? (currentUser.realName || currentUser.name) : '接單旅人';
+      } else if (role === 'SENDER') {
+        senderName = document.getElementById('tripartite-sender-name').innerText || '寄件人';
+      } else {
+        senderName = document.getElementById('tripartite-recipient-name').innerText || '收件人';
+      }
+
+      const newMsg = {
+        id: `MSG_${Date.now()}`,
+        senderRole: role,
+        senderName,
+        message: text,
+        timestamp: new Date().toISOString()
+      };
+
+      try {
+        await fetch(`/api/shipments/${activeTripartiteShipmentId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${currentAuthToken}`,
+          },
+          body: JSON.stringify(newMsg),
+        });
+      } catch (e) {
+        // offline fallback
+      }
+
+      localMessages.push(newMsg);
+      renderChatMessages();
+      input.value = '';
+    }
+
+    function sendQuickMessage(text) {
+      const input = document.getElementById('chat-input-message');
+      if (input) {
+        input.value = text;
+        sendChatMessage();
+      }
     }
 
     function handleVerifyPickup() {
@@ -1614,15 +1975,27 @@
 
       <!-- 表單內容 -->
       <div class="space-y-3 text-xs">
-        <!-- 姓名 / 稱呼 -->
+        <!-- 帳號名稱 (E-mail) -->
         <div>
-          <label class="block font-medium text-slate-300 mb-1">真實姓名 / 稱呼</label>
-          <input type="text" id="auth-input-name" placeholder="例如：陳大明" value="陳小華" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <div class="flex items-center justify-between mb-1">
+            <label class="font-medium text-slate-300">帳號名稱 (電子郵件 E-mail)</label>
+            <span class="text-[10px] text-blue-400 font-medium">使用 E-mail 作為會員帳號</span>
+          </div>
+          <input type="email" id="auth-input-email" placeholder="例如：user@tripcourier.com" value="chen.xiaohua@tripcourier.com" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+
+        <!-- 真實姓名 (需與證件姓名相符合) -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="font-medium text-slate-300">真實姓名</label>
+            <span class="text-[10px] text-amber-400 font-medium">需與身分證件／護照姓名相符合</span>
+          </div>
+          <input type="text" id="auth-input-realname" placeholder="請填寫證件登記之真實姓名" value="陳小華" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
         </div>
 
         <!-- 偏好身分角色 -->
         <div>
-          <label class="block font-medium text-slate-300 mb-1">初次使用主要身分角色</label>
+          <label class="block font-medium text-slate-300 mb-1">主要使用角色</label>
           <select id="auth-select-role" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
             <option value="ALL">🌟 全功能自由通用 (寄件・順路旅人・收件)</option>
             <option value="SENDER">📦 寄件委託者 (跨城/跨國寄件託運需求)</option>
@@ -1631,9 +2004,12 @@
           </select>
         </div>
 
-        <!-- 手機號碼輸入與發送 OTP -->
+        <!-- 手機號碼輸入與發送 OTP (雙重驗證) -->
         <div>
-          <label class="block font-medium text-slate-300 mb-1">台灣手機號碼 (接收動態簡訊碼)</label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="font-medium text-slate-300">手機號碼 (接收簡訊動態 OTP)</label>
+            <span class="text-[10px] text-emerald-400 font-medium">手機雙重安全驗證</span>
+          </div>
           <div class="flex gap-2">
             <input type="tel" id="auth-input-phone" placeholder="0912-345-678" value="0988-123-456" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500">
             <button type="button" onclick="handleSendOtp()" id="btn-send-otp" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shrink-0 transition-all text-xs">

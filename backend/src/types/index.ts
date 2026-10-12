@@ -259,10 +259,13 @@ export type UserRole = 'SENDER' | 'TRAVELER' | 'RECIPIENT' | 'ALL';
 
 export interface UserAccount {
   id: string;
-  phone: string;
-  name: string;
+  email: string;                  // 帳號名稱 (使用 e-mail 作為帳號申請)
+  realName: string;               // 真實姓名 (需與身分證件/護照姓名相符合)
+  phone: string;                  // 手機號碼 (接收 OTP 簡訊雙重驗證)
+  name: string;                   // 顯示暱稱 / 稱謂 (預設同 realName)
   roles: UserRole[];
   isPhoneVerified: boolean;
+  isEmailVerified: boolean;
   kycLevel: 'UNVERIFIED' | 'PHONE_VERIFIED' | 'ID_VERIFIED';
   rating: number;
   walletBalanceTwd: number;
@@ -278,13 +281,55 @@ export interface AuthSession {
 
 export interface SendOtpRequest {
   phone: string;
+  email?: string;                 // 帳號 e-mail
+  realName?: string;              // 真實證件姓名
   purpose: 'REGISTER' | 'LOGIN';
 }
 
 export interface VerifyOtpRequest {
   phone: string;
   otp: string;
+  email?: string;                 // 帳號 e-mail
+  realName?: string;              // 真實證件姓名
   name?: string;
   preferredRole?: UserRole;
+}
+
+// -------------------------------------------------------------
+// 旅人、寄出人與收貨人 三方雙向溝通與透明化資訊模型
+// -------------------------------------------------------------
+export interface ShipmentMessage {
+  id: string;
+  shipmentId: string;
+  senderRole: 'SENDER' | 'TRAVELER' | 'RECIPIENT' | 'SYSTEM';
+  senderName: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface TripartiteShipmentInfo {
+  shipmentId: string;
+  title: string;
+  status: ShipmentStatus;
+  sender: {
+    id: string;
+    realName: string;
+    phone: string;
+    pickupLocation: LocationPoint;
+    handoverNote?: string;
+  };
+  recipient: {
+    realName: string;
+    phone: string;
+    dropoffLocation: LocationPoint;
+    handoverNote?: string;
+  };
+  traveler?: {
+    id: string;
+    realName: string;
+    phone: string;
+    transportMode?: TransportMode;
+    tripNumber?: string;
+  };
 }
 

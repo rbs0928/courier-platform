@@ -8,11 +8,12 @@ import { PricingEngine } from './modules/pricing/PricingEngine.ts';
 import { EscrowWalletService } from './modules/escrow/EscrowWalletService.ts';
 import { AuthService } from './modules/auth/AuthService.ts';
 import { MAJOR_HUBS } from './database/StationHubs.ts';
-import type { Itinerary, PackageShipment, TransportMode, UserAccount } from './types/index.ts';
+import type { Itinerary, PackageShipment, TransportMode, UserAccount, ShipmentMessage, TripartiteShipmentInfo } from './types/index.ts';
 
 const store = new InMemoryStore();
 const escrowService = new EscrowWalletService();
 const authService = new AuthService();
+const shipmentMessages = new Map<string, ShipmentMessage[]>();
 
 function parseJsonBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -112,11 +113,13 @@ export function createServer(): http.Server {
         });
       }
 
-      // 1.1 手機動態 OTP 驗證碼發送 API (註冊 / 登入)
+      // 1.1 手機動態 OTP 驗證碼發送 API (註冊 / 登入，需提供 email 作為帳號、姓名與手機)
       if (pathname === '/api/auth/send-otp' && method === 'POST') {
         const body = await parseJsonBody(req);
         const result = authService.sendOtp({
           phone: body.phone || '',
+          email: body.email,
+          realName: body.realName,
           purpose: body.purpose || 'REGISTER',
         });
         return sendJson(res, result.success ? 200 : 400, result);
@@ -128,14 +131,16 @@ export function createServer(): http.Server {
         const result = authService.verifyOtpAndLogin({
           phone: body.phone || '',
           otp: body.otp || '',
-          name: body.name,
+          email: body.email,
+          realName: body.realName,
+          name: body.realName || body.name,
           preferredRole: body.preferredRole,
         });
         if (result.success && result.session) {
           // 同步為用戶開立 Escrow 託管錢包
           escrowService.getOrCreateWallet(
             result.session.user.id,
-            result.session.user.name,
+            result.session.user.realName || result.session.user.name,
             result.session.user.walletBalanceTwd
           );
         }
@@ -254,9 +259,10 @@ export function createServer(): http.Server {
       if (pathname === '/api/shipments' && method === 'POST') {
         const body = await parseJsonBody(req);
 
-        // 1. AI 違禁品初審與各國法規檢驗
+        // 1. AI 違禁品初審與各國法規檢驗 (優先級最高，直接攔截槍砲/毒品/生肉等違禁品)
         const isInternational = Boolean(body.isInternational);
         const tempShipmentId = `PKG_${Date.now()}`;
+
         const aiScreening = ComplianceAndSafetyModule.aiScreenContraband({
           shipmentId: tempShipmentId,
           title: body.title || '',
@@ -272,6 +278,33 @@ export function createServer(): http.Server {
             error: 'CONTRABAND_REJECTED',
             message: aiScreening.reasonExplanation,
             aiScreening,
+          });
+        }
+
+        // 2. 寄出人須輸入收件人詳細資訊 (姓名 / 電話 / 準確面交位置)
+        const recipientName = (body.recipientName || '').trim();
+        const recipientPhone = (body.recipientPhone || '').trim();
+        const dropoffLocation = body.dropoffLocation;
+
+        if (!recipientName) {
+          return sendJson(res, 400, {
+            success: false,
+            error: 'MISSING_RECIPIENT_NAME',
+            message: '寄出人須輸入收件人真實姓名 (需與證件相符合)，確保旅人送達時能準確交付。',
+          });
+        }
+        if (!recipientPhone || recipientPhone.length < 8) {
+          return sendJson(res, 400, {
+            success: false,
+            error: 'MISSING_RECIPIENT_PHONE',
+            message: '寄出人須輸入收件人聯絡電話 (有效手機/電話)，以供旅人與收件人雙向即時通訊。',
+          });
+        }
+        if (!dropoffLocation || (!dropoffLocation.name && !dropoffLocation.address && !dropoffLocation.formattedAddress)) {
+          return sendJson(res, 400, {
+            success: false,
+            error: 'MISSING_DROPOFF_LOCATION',
+            message: '寄出人須輸入收件人準確面交位置 (例如「捷運出口、地標、詳細門牌」)。',
           });
         }
 
@@ -295,10 +328,10 @@ export function createServer(): http.Server {
         const shipment: PackageShipment = {
           id: tempShipmentId,
           senderId: currentUser?.id || body.senderId || 'USR_SENDER_DEFAULT',
-          senderName: currentUser?.name || body.senderName || '寄件人',
+          senderName: currentUser?.realName || currentUser?.name || body.senderName || '寄件人',
           senderPhone: currentUser?.phone || body.senderPhone || '0911-000-000',
-          recipientName: body.recipientName || '收件人',
-          recipientPhone: body.recipientPhone || '0922-000-000',
+          recipientName,
+          recipientPhone,
           title: body.title,
           description: body.description,
           category: body.category || 'OTHER',
@@ -306,7 +339,7 @@ export function createServer(): http.Server {
           dimensions: body.dimensions || { lengthCm: 20, widthCm: 15, heightCm: 10 },
           declaredValue: body.declaredValue || 1000,
           pickupLocation: body.pickupLocation,
-          dropoffLocation: body.dropoffLocation,
+          dropoffLocation,
           earliestPickupTime: body.earliestPickupTime,
           deliveryDeadline: body.deliveryDeadline,
           transportModePreference: body.transportModePreference,
@@ -319,13 +352,25 @@ export function createServer(): http.Server {
         };
 
         store.saveShipment(shipment);
+
+        // 初始化三方雙向溝通對話通道
+        const initialSystemMsg: ShipmentMessage = {
+          id: `MSG_${Date.now()}_SYS`,
+          shipmentId: tempShipmentId,
+          senderRole: 'SYSTEM',
+          senderName: '平台安全與合規協同系統',
+          message: `📍【三方雙向溝通通道已建立】寄件人 [${shipment.senderName}] 託運「${shipment.title}」往 [${recipientName} (${dropoffLocation.name || dropoffLocation.address})]。旅人接單後即可在此與寄件人、收件人雙向溝通，確認面交地標與預估送達時間 (ETA)。`,
+          timestamp: new Date().toISOString(),
+        };
+        shipmentMessages.set(tempShipmentId, [initialSystemMsg]);
+
         return sendJson(res, 201, {
           success: true,
           data: shipment,
           requiresManualReview: aiScreening.requiresHumanReview,
           message: aiScreening.requiresHumanReview
             ? '⚠️ 系統偵測到疑似項目，已提交人工審核工單，審查通過後將自動開放媒合。'
-            : '✅ AI 初審合格，包裹已發布至順路媒合大廳！',
+            : '✅ AI 初審合格，收件人詳細資料驗收無誤，包裹已發布至順路媒合大廳！',
         });
       }
 
@@ -386,12 +431,133 @@ export function createServer(): http.Server {
         // 鎖定寄件人款項進入 Escrow
         const escrowTx = escrowService.holdEscrowForShipment(shipment);
 
+        // 旅人接單後自動於溝通串發送報到通知
+        const travelerUser = body.travelerId ? authService.getUserById(body.travelerId) : null;
+        const travelerName = travelerUser?.realName || travelerUser?.name || '順路旅人';
+        const msgList = shipmentMessages.get(shipmentId) || [];
+        msgList.push({
+          id: `MSG_${Date.now()}_TRV_ACCEPT`,
+          shipmentId,
+          senderRole: 'TRAVELER',
+          senderName: travelerName,
+          message: `👋 您好！我是接單旅人 [${travelerName}]，已確認順路捎帶此包裹！我將於出發前在此與寄出人核對面交點，並向收貨人回報預計抵達時間 (ETA)。`,
+          timestamp: new Date().toISOString(),
+        });
+        shipmentMessages.set(shipmentId, msgList);
+
         return sendJson(res, 200, {
           success: true,
           message: '已成功媒合接單！款項已安全進入平台託管保管。請於面交時執行開箱驗視存證。',
           shipment,
           escrow: escrowTx,
         });
+      }
+
+      // 10.1 查詢包裹三方透明化資訊 (確保旅人了解貨由誰寄出與貨寄到誰手上、面交位置在哪)
+      const tripartiteMatch = pathname.match(/^\/api\/shipments\/([^/]+)\/tripartite$/);
+      if (tripartiteMatch && method === 'GET') {
+        const shipmentId = tripartiteMatch[1];
+        const shipment = store.getShipment(shipmentId);
+        if (!shipment) {
+          return sendJson(res, 404, { success: false, message: '找不到指定包裹' });
+        }
+
+        const senderUser = authService.getUserById(shipment.senderId);
+        const travelerUser = shipment.assignedTravelerId ? authService.getUserById(shipment.assignedTravelerId) : null;
+        const itinerary = shipment.assignedItineraryId ? store.getItinerary(shipment.assignedItineraryId) : null;
+
+        const tripartiteInfo: TripartiteShipmentInfo = {
+          shipmentId: shipment.id,
+          title: shipment.title,
+          status: shipment.status,
+          sender: {
+            id: shipment.senderId,
+            realName: senderUser?.realName || shipment.senderName,
+            phone: senderUser?.phone || shipment.senderPhone,
+            pickupLocation: shipment.pickupLocation,
+            handoverNote: `起點面交：${shipment.pickupLocation.name} (${shipment.pickupLocation.address})`,
+          },
+          recipient: {
+            realName: shipment.recipientName,
+            phone: shipment.recipientPhone,
+            dropoffLocation: shipment.dropoffLocation,
+            handoverNote: `終點面交：${shipment.dropoffLocation.name} (${shipment.dropoffLocation.address})`,
+          },
+          traveler: travelerUser || shipment.assignedTravelerId ? {
+            id: shipment.assignedTravelerId || '',
+            realName: travelerUser?.realName || travelerUser?.name || '順路旅人',
+            phone: travelerUser?.phone || '0912-345-678',
+            transportMode: itinerary?.transportMode || shipment.transportModePreference,
+            tripNumber: itinerary?.tripNumber,
+          } : undefined,
+        };
+
+        return sendJson(res, 200, { success: true, data: tripartiteInfo });
+      }
+
+      // 10.2 取得三方即時溝通訊息列表 (旅人 ↔ 寄出人 ↔ 收貨人)
+      const messagesGetMatch = pathname.match(/^\/api\/shipments\/([^/]+)\/messages$/);
+      if (messagesGetMatch && method === 'GET') {
+        const shipmentId = messagesGetMatch[1];
+        const shipment = store.getShipment(shipmentId);
+        if (!shipment) {
+          return sendJson(res, 404, { success: false, message: '找不到指定包裹' });
+        }
+
+        let msgs = shipmentMessages.get(shipmentId);
+        if (!msgs) {
+          msgs = [
+            {
+              id: `MSG_${Date.now()}_SYS_INIT`,
+              shipmentId,
+              senderRole: 'SYSTEM',
+              senderName: '平台安全與合規協同系統',
+              message: `📍【三方雙向溝通通道已開啟】寄出人 [${shipment.senderName}] ➔ 收貨人 [${shipment.recipientName}]。旅人可在此確認出發地標、行車動態與送達開箱面交位置。`,
+              timestamp: shipment.createdAt || new Date().toISOString(),
+            },
+          ];
+          shipmentMessages.set(shipmentId, msgs);
+        }
+
+        return sendJson(res, 200, { success: true, data: msgs });
+      }
+
+      // 10.3 發送三方雙向溝通訊息 (旅人、寄出人或收貨人)
+      const messagesPostMatch = pathname.match(/^\/api\/shipments\/([^/]+)\/messages$/);
+      if (messagesPostMatch && method === 'POST') {
+        const shipmentId = messagesPostMatch[1];
+        const shipment = store.getShipment(shipmentId);
+        if (!shipment) {
+          return sendJson(res, 404, { success: false, message: '找不到指定包裹' });
+        }
+
+        const body = await parseJsonBody(req);
+        const text = (body.message || '').trim();
+        if (!text) {
+          return sendJson(res, 400, { success: false, message: '訊息內容不能為空' });
+        }
+
+        const authHeader = req.headers.authorization;
+        const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+        const currentUser = authService.getUserByToken(token);
+
+        const senderRole = body.senderRole || (currentUser?.id === shipment.assignedTravelerId ? 'TRAVELER' : currentUser?.id === shipment.senderId ? 'SENDER' : 'RECIPIENT');
+        const senderName = currentUser?.realName || currentUser?.name || body.senderName || (senderRole === 'TRAVELER' ? '順路旅人' : senderRole === 'SENDER' ? shipment.senderName : shipment.recipientName);
+
+        const newMsg: ShipmentMessage = {
+          id: `MSG_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          shipmentId,
+          senderRole,
+          senderName,
+          message: text,
+          timestamp: new Date().toISOString(),
+        };
+
+        const msgs = shipmentMessages.get(shipmentId) || [];
+        msgs.push(newMsg);
+        shipmentMessages.set(shipmentId, msgs);
+
+        return sendJson(res, 201, { success: true, message: '訊息已成功送達三方溝通板', data: newMsg });
       }
 
       // 11. 實體開箱驗視與取件 OTP 驗證 (進入運送中)

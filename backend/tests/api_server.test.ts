@@ -64,6 +64,80 @@ server.listen(TEST_PORT, async () => {
     assert.strictEqual(contrabandJson.error, 'CONTRABAND_REJECTED');
     console.log('✅ POST /api/shipments 違禁品 AI 防護直接攔截通過');
 
+    // 5.1 測試寄件人缺少收件人詳細資訊 (姓名/電話/準確位置) 正確被攔截
+    const missingRecipientRes = await fetch(`${baseUrl}/api/shipments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: '精密筆記型電腦',
+        description: '盒裝完整',
+        // 未提供 recipientName, recipientPhone, dropoffLocation
+      }),
+    });
+    const missingRecipientJson = await missingRecipientRes.json();
+    assert.strictEqual(missingRecipientRes.status, 400);
+    assert.ok(missingRecipientJson.error.startsWith('MISSING_RECIPIENT_'), '缺少收件人姓名/電話應被嚴格攔截');
+    console.log('✅ POST /api/shipments 寄件人未填寫收件人詳細資訊正確被攔截');
+
+    // 5.2 測試寄件人完整填寫收件人詳細資訊並成功發布
+    const createShipmentRes = await fetch(`${baseUrl}/api/shipments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: '重要商務合約正本',
+        description: '加蓋公司印鑑之公文袋',
+        category: 'DOCUMENT',
+        recipientName: '林董事長特助李明',
+        recipientPhone: '0933-777-888',
+        dropoffLocation: {
+          name: '台北 101 大樓 1 樓松智路大廳會面點',
+          address: '台北市信義區信義路五段7號',
+          lat: 25.0339,
+          lng: 121.5645,
+        },
+        pickupLocation: {
+          name: '台北車站 M8 出口前',
+          address: '台北市中正區忠孝西路一段49號',
+          lat: 25.0462,
+          lng: 121.5175,
+        },
+        transportModePreference: 'MRT',
+      }),
+    });
+    const createShipmentJson = await createShipmentRes.json();
+    assert.strictEqual(createShipmentRes.status, 201);
+    const createdShipmentId = createShipmentJson.data.id;
+    assert.strictEqual(createShipmentJson.data.recipientName, '林董事長特助李明');
+    console.log(`✅ POST /api/shipments 完整收件人資訊發布成功 (ID: ${createdShipmentId})`);
+
+    // 5.3 測試查詢三方透明化資訊 (確保旅人知悉貨由誰寄出、貨寄到誰手上與準確面交位置)
+    const triRes = await fetch(`${baseUrl}/api/shipments/${createdShipmentId}/tripartite`);
+    const triJson = await triRes.json();
+    assert.strictEqual(triRes.status, 200);
+    assert.strictEqual(triJson.data.recipient.realName, '林董事長特助李明');
+    assert.strictEqual(triJson.data.recipient.phone, '0933-777-888');
+    assert.ok(triJson.data.recipient.dropoffLocation.name.includes('台北 101'), '終點面交位置需透明可見');
+    console.log('✅ GET /api/shipments/:id/tripartite 三方身分與面交位置透明化查詢通過');
+
+    // 5.4 測試三方雙向溝通對話板 (訊息收發)
+    const postMsgRes = await fetch(`${baseUrl}/api/shipments/${createdShipmentId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderRole: 'TRAVELER',
+        senderName: '陳旅人 (捷運通勤族)',
+        message: '您好！我預計 15 分鐘後抵達 101 松智路大廳，請收件人備妥身分證件進行現場開箱驗收。',
+      }),
+    });
+    const postMsgJson = await postMsgRes.json();
+    assert.strictEqual(postMsgRes.status, 201);
+
+    const getMsgRes = await fetch(`${baseUrl}/api/shipments/${createdShipmentId}/messages`);
+    const getMsgJson = await getMsgRes.json();
+    assert.strictEqual(getMsgRes.status, 200);
+    assert.ok(getMsgJson.data.length >= 2, '應包含系統初始訊息與旅人發送訊息');
+    console.log(`✅ /api/shipments/:id/messages 三方即時雙向溝通訊息收發通過 (目前 ${getMsgJson.data.length} 則通訊紀錄)`);
+
     // 6. 測試 /api/compliance/regulations 航空各國法規庫
     const regsRes = await fetch(`${baseUrl}/api/compliance/regulations`);
     const regsJson = await regsRes.json();
@@ -78,33 +152,41 @@ server.listen(TEST_PORT, async () => {
     assert.ok(mapsJson.data.length > 0, '應成功返回 Google Places 建議候選');
     console.log(`✅ GET /api/maps/places/autocomplete 通過 (搜尋命中 ${mapsJson.data.length} 處地點)`);
 
-    // 8. 測試 /api/auth/send-otp 發送手機驗證碼
+    // 8. 測試 /api/auth/send-otp 發送手機驗證碼 (含 Email 帳號與真實證件姓名)
     const otpRes = await fetch(`${baseUrl}/api/auth/send-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: '0977-888-999', purpose: 'REGISTER' }),
+      body: JSON.stringify({
+        email: 'chen.xiaomei@globalcourier.com',
+        realName: '陳小美',
+        phone: '0977-888-999',
+        purpose: 'REGISTER',
+      }),
     });
     const otpJson = await otpRes.json();
     assert.strictEqual(otpRes.status, 200);
     assert.ok(otpJson.debugOtp, '應回傳動態驗證碼供客戶端模擬驗收');
     console.log(`✅ POST /api/auth/send-otp 通過 (產生驗證碼: ${otpJson.debugOtp})`);
 
-    // 9. 測試 /api/auth/verify-otp 完成新用戶手機驗證與帳號啟用
+    // 9. 測試 /api/auth/verify-otp 完成新用戶 Email 帳號、真實姓名與手機雙重驗證註冊
     const verifyRes = await fetch(`${baseUrl}/api/auth/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        email: 'chen.xiaomei@globalcourier.com',
+        realName: '陳小美',
         phone: '0977-888-999',
         otp: otpJson.debugOtp,
-        name: '陳小美 (寄件兼收件人)',
         preferredRole: 'SENDER',
       }),
     });
     const verifyJson = await verifyRes.json();
     assert.strictEqual(verifyRes.status, 200);
     assert.ok(verifyJson.session && verifyJson.session.token, '應核發 Session Token');
+    assert.strictEqual(verifyJson.session.user.email, 'chen.xiaomei@globalcourier.com', '帳號名稱應為 Email');
+    assert.strictEqual(verifyJson.session.user.realName, '陳小美', '真實姓名應與證件登記相符');
     assert.strictEqual(verifyJson.session.user.isPhoneVerified, true, '手機狀態應為已驗證');
-    console.log(`✅ POST /api/auth/verify-otp 通過 (用戶 [${verifyJson.session.user.name}] 成功註冊啟用帳號)`);
+    console.log(`✅ POST /api/auth/verify-otp 通過 (用戶 [${verifyJson.session.user.realName} (${verifyJson.session.user.email})] 成功雙重驗證註冊啟用帳號)`);
 
     // 10. 測試 /api/auth/me 憑 Token 查詢當前登入者
     const meRes = await fetch(`${baseUrl}/api/auth/me`, {
@@ -112,7 +194,8 @@ server.listen(TEST_PORT, async () => {
     });
     const meJson = await meRes.json();
     assert.strictEqual(meRes.status, 200);
-    assert.strictEqual(meJson.user.name, '陳小美 (寄件兼收件人)');
+    assert.strictEqual(meJson.user.realName, '陳小美');
+    assert.strictEqual(meJson.user.email, 'chen.xiaomei@globalcourier.com');
     console.log('✅ GET /api/auth/me 憑 Token 驗證當前登入者資訊通過');
 
     // 10.1 測試 /api/escrow/topup 模擬線上金流儲值
