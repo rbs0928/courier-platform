@@ -127,4 +127,67 @@ console.log('🧪 正在執行 [PricingEngine] 多運具計費引擎單元測試
   console.log('✅ 測試 7 通過: 國內航空離島航線空運計費符合預期');
 }
 
+// 測試 8: 國內航空急件階梯加成 (如需更短時間送達，費用需更高)
+{
+  const standardQuote = PricingEngine.calculateQuote({
+    transportMode: 'DOMESTIC_FLIGHT',
+    distanceKm: 300,
+    weightKg: 2.0,
+    declaredValueTwd: 1000,
+    urgencyLevel: 'STANDARD',
+  });
+  const expressQuote = PricingEngine.calculateQuote({
+    transportMode: 'DOMESTIC_FLIGHT',
+    distanceKm: 300,
+    weightKg: 2.0,
+    declaredValueTwd: 1000,
+    urgencyLevel: 'EXPRESS',
+  });
+  const rushQuote = PricingEngine.calculateQuote({
+    transportMode: 'DOMESTIC_FLIGHT',
+    distanceKm: 300,
+    weightKg: 2.0,
+    declaredValueTwd: 1000,
+    urgencyLevel: 'RUSH',
+  });
+
+  assert.strictEqual(standardQuote.urgencyFee, 0, '標準時效無急件加成');
+  assert.strictEqual(expressQuote.urgencyFee, 280, '國內航空急速下一航班應加收 $280');
+  assert.strictEqual(rushQuote.urgencyFee, 560, '國內航空下班機最速直送應加收 $560');
+  assert.ok(rushQuote.totalAmount > expressQuote.totalAmount && expressQuote.totalAmount > standardQuote.totalAmount, '時效越短費用應越高');
+  assert.ok(rushQuote.travelerEarnings > standardQuote.travelerEarnings, '急件應讓旅人獲得更高順路報酬');
+  console.log(`✅ 測試 8 通過: 國內航空時效階梯加價符合預期 (標準: $${standardQuote.totalAmount} -> 急速: $${expressQuote.totalAmount} -> 最速班機: $${rushQuote.totalAmount})`);
+}
+
+// 測試 9: 腳踏車 / YouBike 急件階梯加成 (如需更短時間送達，費用需更高)
+{
+  const standardQuote = PricingEngine.calculateQuote({
+    transportMode: 'BICYCLE',
+    distanceKm: 3.0,
+    weightKg: 1.0,
+    declaredValueTwd: 1000,
+    urgencyLevel: 'STANDARD',
+  });
+  const expressQuote = PricingEngine.calculateQuote({
+    transportMode: 'BICYCLE',
+    distanceKm: 3.0,
+    weightKg: 1.0,
+    declaredValueTwd: 1000,
+    urgencyLevel: 'EXPRESS',
+  });
+  const rushQuote = PricingEngine.calculateQuote({
+    transportMode: 'BICYCLE',
+    distanceKm: 3.0,
+    weightKg: 1.0,
+    declaredValueTwd: 1000,
+    urgencyLevel: 'RUSH',
+  });
+
+  assert.strictEqual(standardQuote.urgencyFee, 0, '標準市區單車無急件加成');
+  assert.strictEqual(expressQuote.urgencyFee, 30, '單車 1小時急速送達應加收 $30');
+  assert.strictEqual(rushQuote.urgencyFee, 60, '單車 30分鐘閃送直達應加收 $60');
+  assert.ok(rushQuote.totalAmount > expressQuote.totalAmount && expressQuote.totalAmount > standardQuote.totalAmount, '時效越短費用應越高');
+  console.log(`✅ 測試 9 通過: 腳踏車時效階梯加價符合預期 (標準: $${standardQuote.totalAmount} -> 1小時: $${expressQuote.totalAmount} -> 30分鐘: $${rushQuote.totalAmount})`);
+}
+
 console.log('\n🎉 所有 [PricingEngine] 測試均順利通過！');

@@ -227,6 +227,30 @@
             </div>
           </div>
 
+          <!-- 配送時效需求等級選擇器 (如需更短時間送達，費用需更高) -->
+          <div class="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <span>⏱️</span><span>配送時效需求 (如需更短時間送達，費用階梯加成)</span>
+              </span>
+              <span id="urgency-eta-text" class="text-[10px] text-blue-400 font-mono">預估時效: ~2.0 小時送達</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" onclick="selectUrgency('STANDARD')" id="btn-urgency-STANDARD" class="urgency-btn p-2 rounded-lg border-2 border-blue-500 bg-blue-500/10 flex flex-col items-center gap-0.5 text-center transition-all">
+                <span class="text-xs font-bold text-white">標準順路</span>
+                <span class="text-[10px] text-slate-400">一般彈性 (無加價)</span>
+              </button>
+              <button type="button" onclick="selectUrgency('EXPRESS')" id="btn-urgency-EXPRESS" class="urgency-btn p-2 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 flex flex-col items-center gap-0.5 text-center transition-all">
+                <span class="text-xs font-bold text-amber-300">⚡ 急速快件</span>
+                <span id="urgency-express-label" class="text-[10px] text-amber-400/90">+加急費</span>
+              </button>
+              <button type="button" onclick="selectUrgency('RUSH')" id="btn-urgency-RUSH" class="urgency-btn p-2 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 flex flex-col items-center gap-0.5 text-center transition-all">
+                <span class="text-xs font-bold text-rose-400">🔥 極限即時</span>
+                <span id="urgency-rush-label" class="text-[10px] text-rose-400/90">下班機/高鐵直送</span>
+              </button>
+            </div>
+          </div>
+
           <!-- AI 初審與疑似違禁品指示卡片 -->
           <div id="ai-screening-card" class="p-3.5 rounded-xl border bg-emerald-500/10 border-emerald-500/20 flex items-start gap-3">
             <span id="ai-icon" class="text-xl">🛡️</span>
@@ -275,6 +299,10 @@
               <div class="flex justify-between text-slate-400">
                 <span>海關/檢疫申報規費:</span>
                 <span id="quote-customs" class="text-slate-200 font-mono">0 TWD</span>
+              </div>
+              <div id="row-quote-urgency" class="hidden justify-between text-amber-300 font-medium">
+                <span>時效急件加成費用:</span>
+                <span id="quote-urgency" class="font-mono">+0 TWD</span>
               </div>
               <div class="border-t border-slate-800 pt-2 flex justify-between text-emerald-400 font-semibold">
                 <span>順路旅人/騎士實收收益:</span>
@@ -811,6 +839,23 @@
       btn.className = 'w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-white shadow-lg shadow-blue-500/20 text-sm';
     }
 
+    let currentUrgency = 'STANDARD';
+
+    function selectUrgency(urgency) {
+      currentUrgency = urgency;
+      ['STANDARD', 'EXPRESS', 'RUSH'].forEach(u => {
+        const btn = document.getElementById(`btn-urgency-${u}`);
+        if (btn) {
+          if (u === urgency) {
+            btn.className = 'urgency-btn p-2 rounded-lg border-2 border-blue-500 bg-blue-500/15 flex flex-col items-center gap-0.5 text-center transition-all shadow-sm';
+          } else {
+            btn.className = 'urgency-btn p-2 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 flex flex-col items-center gap-0.5 text-center transition-all';
+          }
+        }
+      });
+      recalculateQuote();
+    }
+
     function recalculateQuote() {
       const weight = parseFloat(document.getElementById('input-weight').value) || 1.0;
       const value = parseFloat(document.getElementById('input-value').value) || 1000;
@@ -818,10 +863,14 @@
       let baseFare = 75;
       let distFee = 48;
       let weightFee = 6;
+      let urgencyFee = 0;
       let insFee = Math.max(10, Math.round(value * 0.01));
       let customsFee = 0;
       let commissionRate = 0.15;
       let modeName = '機車外送';
+      let etaText = '預估時效: ~2.0 小時送達';
+      let expressSurgeDesc = '+$40 (1小時專送)';
+      let rushSurgeDesc = '+$80 (30分鐘閃送)';
 
       switch(currentMode) {
         case 'MOTORCYCLE':
@@ -830,21 +879,40 @@
           weightFee = Math.max(0, weight - 2) * 12;
           commissionRate = 0.15;
           modeName = '機車外送';
+          expressSurgeDesc = '+$40 (1小時專送)';
+          rushSurgeDesc = '+$80 (30分鐘閃送)';
+          if (currentUrgency === 'EXPRESS') { urgencyFee = 40; etaText = '預估時效: ~1.0 小時同城直送'; }
+          else if (currentUrgency === 'RUSH') { urgencyFee = 80; etaText = '預估時效: ~30 分鐘閃電直送'; }
+          else { etaText = '預估時效: ~2.0 小時同城順路'; }
           break;
+
         case 'BICYCLE':
+          // 腳踏車 / YouBike (如需更短時間送達，費用需更高)
           baseFare = 60;
           distFee = 16;
           weightFee = Math.max(0, weight - 2) * 8;
           commissionRate = 0.12;
           modeName = '腳踏車 YouBike';
+          expressSurgeDesc = '+$30 (1小時急速)';
+          rushSurgeDesc = '+$60 (30分鐘閃送)';
+          if (currentUrgency === 'EXPRESS') { urgencyFee = 30; etaText = '預估時效: ~1.0 小時快速送達'; }
+          else if (currentUrgency === 'RUSH') { urgencyFee = 60; etaText = '預估時效: ~30 分鐘閃送直達'; }
+          else { etaText = '預估時效: ~2.5 小時市區悠活順路'; }
           break;
+
         case 'MRT':
           baseFare = 80;
           distFee = 25;
           weightFee = Math.max(0, weight - 2) * 15;
           commissionRate = 0.15;
           modeName = '捷運通勤';
+          expressSurgeDesc = '+$35 (1.5小時面交)';
+          rushSurgeDesc = '+$70 (1小時最速)';
+          if (currentUrgency === 'EXPRESS') { urgencyFee = 35; etaText = '預估時效: ~1.5 小時站點面交'; }
+          else if (currentUrgency === 'RUSH') { urgencyFee = 70; etaText = '預估時效: ~1.0 小時最速直達'; }
+          else { etaText = '預估時效: ~3.0 小時日常通勤'; }
           break;
+
         case 'CAR':
           baseFare = 160;
           distFee = 565;
@@ -852,7 +920,13 @@
           insFee = Math.max(15, Math.round(value * 0.015));
           commissionRate = 0.16;
           modeName = '私家休旅車';
+          expressSurgeDesc = '+$150 (特快出發)';
+          rushSurgeDesc = '+$300 (即刻直達)';
+          if (currentUrgency === 'EXPRESS') { urgencyFee = 150; etaText = '預估時效: ~2.5 小時特快自駕'; }
+          else if (currentUrgency === 'RUSH') { urgencyFee = 300; etaText = '預估時效: ~1.5 小時即刻專程直達'; }
+          else { etaText = '預估時效: ~5.0 小時當日順路捎帶'; }
           break;
+
         case 'HSR':
           baseFare = 350;
           distFee = 160;
@@ -860,8 +934,15 @@
           insFee = Math.max(20, Math.round(value * 0.02));
           commissionRate = 0.18;
           modeName = '台灣高鐵';
+          expressSurgeDesc = '+$180 (下一班車)';
+          rushSurgeDesc = '+$360 (最速直達)';
+          if (currentUrgency === 'EXPRESS') { urgencyFee = 180; etaText = '預估時效: ~2.0 小時下一班高鐵優先'; }
+          else if (currentUrgency === 'RUSH') { urgencyFee = 360; etaText = '預估時效: ~90 分鐘即刻出發最速直達'; }
+          else { etaText = '預估時效: ~4.0 小時當日跨城順路'; }
           break;
+
         case 'DOMESTIC_FLIGHT':
+          // 國內航空 (離島航線：如需更短時間送達，費用需更高)
           baseFare = 480;
           distFee = 150; // 離島跨海補貼
           weightFee = Math.max(0, weight - 2) * 120;
@@ -869,7 +950,13 @@
           insFee = Math.max(25, Math.round(value * 0.02));
           commissionRate = 0.15;
           modeName = '國內航空 (澎湖/金門)';
+          expressSurgeDesc = '+$280 (下一航班)';
+          rushSurgeDesc = '+$560 (下班機直送)';
+          if (currentUrgency === 'EXPRESS') { urgencyFee = 280; etaText = '預估時效: ~2.0 小時下一航班優先捎帶'; }
+          else if (currentUrgency === 'RUSH') { urgencyFee = 560; etaText = '預估時效: ~60~90 分鐘下班機最速直送 (Rush)'; }
+          else { etaText = '預估時效: ~4.0 小時當日一般航班捎帶'; }
           break;
+
         case 'FLIGHT':
           baseFare = 800;
           distFee = 0;
@@ -878,6 +965,11 @@
           insFee = Math.max(30, Math.round(value * 0.03));
           commissionRate = 0.20;
           modeName = '國際航班行李';
+          expressSurgeDesc = '+$600 (隔日早班)';
+          rushSurgeDesc = '+$1,200 (當日最速)';
+          if (currentUrgency === 'EXPRESS') { urgencyFee = 600; etaText = '預估時效: 隔日早班機優先抵達 (~18hr)'; }
+          else if (currentUrgency === 'RUSH') { urgencyFee = 1200; etaText = '預估時效: 當日最近航班極速直達 (~8hr)'; }
+          else { etaText = '預估時效: 24~48 小時出發航班'; }
           break;
       }
 
@@ -885,10 +977,34 @@
       weightFee = Math.round(weightFee);
       distFee = Math.round(distFee);
       insFee = Math.round(insFee);
+      urgencyFee = Math.round(urgencyFee);
 
-      const total = baseFare + distFee + weightFee + insFee + customsFee;
+      const total = baseFare + distFee + weightFee + urgencyFee + insFee + customsFee;
       const commission = Math.round(total * commissionRate);
       const travelerEarning = total - commission;
+
+      // 更新時效標籤與加成說明
+      const etaLabelEl = document.getElementById('urgency-eta-text');
+      if (etaLabelEl) etaLabelEl.innerText = etaText;
+
+      const expLabelEl = document.getElementById('urgency-express-label');
+      if (expLabelEl) expLabelEl.innerText = expressSurgeDesc;
+
+      const rushLabelEl = document.getElementById('urgency-rush-label');
+      if (rushLabelEl) rushLabelEl.innerText = rushSurgeDesc;
+
+      const rowUrgency = document.getElementById('row-quote-urgency');
+      const quoteUrgency = document.getElementById('quote-urgency');
+      if (rowUrgency && quoteUrgency) {
+        if (urgencyFee > 0) {
+          rowUrgency.classList.remove('hidden');
+          rowUrgency.classList.add('flex');
+          quoteUrgency.innerText = `+${urgencyFee} TWD`;
+        } else {
+          rowUrgency.classList.add('hidden');
+          rowUrgency.classList.remove('flex');
+        }
+      }
 
       document.getElementById('display-mode-name').innerText = modeName;
       document.getElementById('quote-total').innerText = total;
@@ -1225,8 +1341,9 @@
 
       const title = document.getElementById('input-title').value;
       const totalQuote = document.getElementById('quote-total').innerText;
+      const urgencyText = currentUrgency === 'RUSH' ? '🔥 極限即時 (最速下班機/高鐵直送)' : currentUrgency === 'EXPRESS' ? '⚡ 急速快件 (加急優先媒合)' : '🟢 標準順路 (彈性捎帶)';
       
-      alert(`🎉 委託發布成功！\n寄件人: ${currentUser.name} (${formatPhoneDisplay(currentUser.phone)})\n項目: ${title}\n預估總額: NT$ ${totalQuote}\n\n已通過 AI 安全合規審核，款項已安全鎖定於平台 Escrow 資金託管中，順路旅人將於接單大廳即時收到推播！`);
+      alert(`🎉 委託發布成功！\n寄件人: ${currentUser.name} (${formatPhoneDisplay(currentUser.phone)})\n託運項目: ${title}\n時效等級: ${urgencyText}\n預估總額: NT$ ${totalQuote}\n\n已通過 AI 安全合規審核，急件報酬已鎖定於平台 Escrow 資金託管中，順路旅人將於接單大廳即時收到推播！`);
       switchTab('traveler');
     }
 

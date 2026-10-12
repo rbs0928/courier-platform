@@ -108,16 +108,21 @@ export interface PackageDimensions {
   heightCm: number;
 }
 
+export type UrgencyLevel = 'STANDARD' | 'EXPRESS' | 'RUSH';
+
 export interface PricingQuote {
   transportMode: TransportMode;
+  urgencyLevel?: UrgencyLevel;
   baseFare: number;
   weightFee: number;
   distanceFee: number;
+  urgencyFee?: number;                 // 時效急件階梯加價
   insuranceFee: number;
   customsFee: number;
   platformCommission: number;
   travelerEarnings: number;
   totalAmount: number;
+  estimatedDeliveryHours?: number;    // 預估送達時數
   currency: 'TWD' | 'USD';
 }
 

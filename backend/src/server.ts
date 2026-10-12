@@ -240,6 +240,7 @@ export function createServer(): http.Server {
           weightKg: body.weightKg || 1,
           declaredValueTwd: body.declaredValueTwd || 1000,
           isInternational: Boolean(body.isInternational),
+          urgencyLevel: body.urgencyLevel || 'STANDARD',
         });
         return sendJson(res, 200, { success: true, data: quote });
       }
@@ -280,6 +281,7 @@ export function createServer(): http.Server {
           weightKg: body.weightKg || 1,
           declaredValueTwd: body.declaredValue || 1000,
           isInternational,
+          urgencyLevel: body.urgencyLevel || 'STANDARD',
         });
 
         const initialStatus = aiScreening.decision === 'SUSPECT_MANUAL_REVIEW'
