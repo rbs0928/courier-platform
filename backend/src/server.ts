@@ -6,11 +6,13 @@ import { CorridorMatchingEngine } from './modules/matching/CorridorMatchingEngin
 import { ComplianceAndSafetyModule } from './modules/compliance/ComplianceAndSafetyModule.ts';
 import { PricingEngine } from './modules/pricing/PricingEngine.ts';
 import { EscrowWalletService } from './modules/escrow/EscrowWalletService.ts';
+import { AuthService } from './modules/auth/AuthService.ts';
 import { MAJOR_HUBS } from './database/StationHubs.ts';
-import type { Itinerary, PackageShipment, TransportMode } from './types/index.ts';
+import type { Itinerary, PackageShipment, TransportMode, UserAccount } from './types/index.ts';
 
 const store = new InMemoryStore();
 const escrowService = new EscrowWalletService();
+const authService = new AuthService();
 
 function parseJsonBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -58,7 +60,7 @@ export function createServer(): http.Server {
 
     try {
       // 0. 首頁與 PWA 靜態資產服務 (Web 原型、manifest、Service Worker、圖標)
-      if ((pathname === '/' || pathname === '/index.html' || pathname === '/prototype') && method === 'GET') {
+      if ((pathname === '/' || pathname === '/index.html' || pathname === '/prototype') && (method === 'GET' || method === 'HEAD')) {
         const publicHtmlPath = path.resolve('public/index.html');
         if (fs.existsSync(publicHtmlPath)) {
           const htmlContent = fs.readFileSync(publicHtmlPath, 'utf-8');
@@ -66,7 +68,7 @@ export function createServer(): http.Server {
             'Content-Type': 'text/html; charset=utf-8',
             'Access-Control-Allow-Origin': '*',
           });
-          return res.end(htmlContent);
+          return res.end(method === 'HEAD' ? '' : htmlContent);
         }
       }
 
@@ -110,6 +112,61 @@ export function createServer(): http.Server {
         });
       }
 
+      // 1.1 手機動態 OTP 驗證碼發送 API (註冊 / 登入)
+      if (pathname === '/api/auth/send-otp' && method === 'POST') {
+        const body = await parseJsonBody(req);
+        const result = authService.sendOtp({
+          phone: body.phone || '',
+          purpose: body.purpose || 'REGISTER',
+        });
+        return sendJson(res, result.success ? 200 : 400, result);
+      }
+
+      // 1.2 手機動態 OTP 驗證與新用戶註冊 / 登入 (簽發 Session Token)
+      if (pathname === '/api/auth/verify-otp' && method === 'POST') {
+        const body = await parseJsonBody(req);
+        const result = authService.verifyOtpAndLogin({
+          phone: body.phone || '',
+          otp: body.otp || '',
+          name: body.name,
+          preferredRole: body.preferredRole,
+        });
+        if (result.success && result.session) {
+          // 同步為用戶開立 Escrow 託管錢包
+          escrowService.getOrCreateWallet(
+            result.session.user.id,
+            result.session.user.name,
+            result.session.user.walletBalanceTwd
+          );
+        }
+        return sendJson(res, result.success ? 200 : 400, result);
+      }
+
+      // 1.3 取得當前已驗證登入者資料
+      if (pathname === '/api/auth/me' && method === 'GET') {
+        const authHeader = req.headers.authorization;
+        const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+        const user = authService.getUserByToken(token);
+        if (!user) {
+          return sendJson(res, 401, { success: false, message: '未登入或登入憑證已失效，請先以手機 OTP 登入' });
+        }
+        const wallet = escrowService.getOrCreateWallet(user.id, user.name);
+        return sendJson(res, 200, { success: true, user, wallet });
+      }
+
+      // 1.4 安全登出
+      if (pathname === '/api/auth/logout' && method === 'POST') {
+        const authHeader = req.headers.authorization;
+        const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+        authService.logout(token);
+        return sendJson(res, 200, { success: true, message: '已成功安全登出' });
+      }
+
+      // 1.5 取得所有已實名/手機驗證用戶
+      if (pathname === '/api/users' && method === 'GET') {
+        return sendJson(res, 200, { success: true, data: authService.getAllUsers() });
+      }
+
       // 2. 取得大眾運輸與航空樞紐站點
       if (pathname === '/api/hubs' && method === 'GET') {
         return sendJson(res, 200, { success: true, data: MAJOR_HUBS });
@@ -123,13 +180,17 @@ export function createServer(): http.Server {
       // 4. 發布新旅客行程
       if (pathname === '/api/itineraries' && method === 'POST') {
         const body = await parseJsonBody(req);
+        const authHeader = req.headers.authorization;
+        const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+        const currentUser = authService.getUserByToken(token);
+
         const itinerary: Itinerary = {
           id: `ITIN_${Date.now()}`,
-          travelerId: body.travelerId || 'USR_ANON_TRAVELER',
-          travelerName: body.travelerName || '順路旅客',
-          travelerPhone: body.travelerPhone || '0900-000-000',
-          travelerRating: 5.0,
-          isKycVerified: Boolean(body.isKycVerified ?? true),
+          travelerId: currentUser?.id || body.travelerId || 'USR_ANON_TRAVELER',
+          travelerName: currentUser?.name || body.travelerName || '順路旅客',
+          travelerPhone: currentUser?.phone || body.travelerPhone || '0900-000-000',
+          travelerRating: currentUser?.rating || 5.0,
+          isKycVerified: Boolean(currentUser?.isPhoneVerified ?? body.isKycVerified ?? true),
           transportMode: body.transportMode || 'HSR',
           tripNumber: body.tripNumber,
           origin: body.origin,
@@ -200,11 +261,15 @@ export function createServer(): http.Server {
           ? 'SCREENING_SUSPECT'
           : 'MATCHING';
 
+        const authHeader = req.headers.authorization;
+        const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+        const currentUser = authService.getUserByToken(token);
+
         const shipment: PackageShipment = {
           id: tempShipmentId,
-          senderId: body.senderId || 'USR_SENDER_DEFAULT',
-          senderName: body.senderName || '寄件人',
-          senderPhone: body.senderPhone || '0911-000-000',
+          senderId: currentUser?.id || body.senderId || 'USR_SENDER_DEFAULT',
+          senderName: currentUser?.name || body.senderName || '寄件人',
+          senderPhone: currentUser?.phone || body.senderPhone || '0911-000-000',
           recipientName: body.recipientName || '收件人',
           recipientPhone: body.recipientPhone || '0922-000-000',
           title: body.title,

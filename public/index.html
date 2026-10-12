@@ -42,6 +42,55 @@
     </header>
 
     <!-- ========================================== -->
+    <!-- 用戶身分狀態列 (未登入提示 / 已登入資訊與登出) -->
+    <!-- ========================================== -->
+    <div id="user-status-bar" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md transition-all">
+      <!-- 訪客未登入狀態 -->
+      <div id="guest-state-box" class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div class="flex items-center gap-2.5 text-xs text-slate-300">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 font-bold text-xs shrink-0">!</span>
+          <div>
+            <span class="font-semibold text-amber-400">訪客模式（未登入）</span>
+            <span class="text-slate-400 hidden sm:inline">｜ 初次使用用戶（旅人／寄貨者／收件者）需先申請帳號並通過手機 OTP 驗證方可操作</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <button onclick="openAuthModal('REGISTER')" class="flex-1 sm:flex-initial px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5">
+            <span>🔑</span><span>手機 OTP 註冊 / 登入</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 已登入狀態 (手機已驗證) -->
+      <div id="auth-state-box" class="hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+        <div class="flex flex-wrap items-center gap-2.5 text-xs">
+          <div class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="font-bold text-white text-sm" id="user-display-name">林晨旅</span>
+            <span class="text-slate-400 font-mono" id="user-display-phone">(0912-345-678)</span>
+          </div>
+          <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold text-[11px] flex items-center gap-1">
+            <span>✅</span><span>手機 OTP 實名已驗證 (KYC L1)</span>
+          </span>
+          <span class="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full text-[11px]" id="user-display-roles">
+            寄件・旅人・收件通用
+          </span>
+          <span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-mono text-[11px] font-semibold flex items-center gap-1">
+            <span>💰</span><span>託管錢包: NT$ <span id="user-display-wallet">1,000</span></span>
+          </span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
+          <button onclick="openAuthModal('SWITCH')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all text-xs border border-slate-700">
+            切換帳號
+          </button>
+          <button onclick="handleLogout()" class="px-3.5 py-1.5 bg-rose-600/80 hover:bg-rose-600 text-white rounded-lg font-semibold transition-all text-xs flex items-center gap-1 shadow">
+            <span>🚪</span><span>登出</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
     <!-- Tab 1: 寄件人端 (Sender View) -->
     <!-- ========================================== -->
     <main id="view-sender" class="space-y-6">
@@ -746,30 +795,367 @@
       document.getElementById('quote-traveler-earning').innerText = `+${travelerEarning} TWD`;
     }
 
+    // ==========================================
+    // 使用者帳號與手機 OTP 驗證模組 (Client-Side Auth)
+    // ==========================================
+    let currentUser = null;
+    let currentAuthToken = '';
+    let lastDebugOtp = '';
+    let otpCountdownTimer = null;
+
+    function openAuthModal(mode = 'REGISTER') {
+      const modal = document.getElementById('auth-modal');
+      modal.classList.remove('hidden');
+      if (mode === 'REGISTER') {
+        document.getElementById('modal-title-text').innerText = '初次使用手機 OTP 帳號申請與實名啟用';
+      } else if (mode === 'SWITCH') {
+        document.getElementById('modal-title-text').innerText = '切換使用者帳號 / 手機 OTP 重新登入';
+      } else {
+        document.getElementById('modal-title-text').innerText = '手機 OTP 安全驗證登入';
+      }
+    }
+
+    function closeAuthModal() {
+      document.getElementById('auth-modal').classList.add('hidden');
+    }
+
+    function updateAuthUI() {
+      const guestBox = document.getElementById('guest-state-box');
+      const authBox = document.getElementById('auth-state-box');
+
+      if (currentUser) {
+        guestBox.classList.add('hidden');
+        authBox.classList.remove('hidden');
+
+        document.getElementById('user-display-name').innerText = currentUser.name || '已驗證用戶';
+        document.getElementById('user-display-phone').innerText = `(${formatPhoneDisplay(currentUser.phone)})`;
+        document.getElementById('user-display-wallet').innerText = Number(currentUser.walletBalanceTwd || 1000).toLocaleString();
+
+        let rolesText = '寄件・旅人・收件通用';
+        if (currentUser.roles && currentUser.roles.length === 1) {
+          if (currentUser.roles[0] === 'SENDER') rolesText = '📦 認證寄件者';
+          if (currentUser.roles[0] === 'TRAVELER') rolesText = '🛵 認證順路旅人';
+          if (currentUser.roles[0] === 'RECIPIENT') rolesText = '📬 認證收件者';
+        }
+        document.getElementById('user-display-roles').innerText = rolesText;
+      } else {
+        guestBox.classList.remove('hidden');
+        authBox.classList.add('hidden');
+      }
+    }
+
+    function formatPhoneDisplay(phone) {
+      if (!phone) return '';
+      const clean = phone.replace(/[^0-9]/g, '');
+      if (clean.length === 10 && clean.startsWith('09')) {
+        return `${clean.slice(0, 4)}-${clean.slice(4, 7)}-${clean.slice(7)}`;
+      }
+      return phone;
+    }
+
+    async function handleSendOtp() {
+      const phoneInput = document.getElementById('auth-input-phone');
+      const phone = phoneInput.value.trim();
+      const sendBtn = document.getElementById('btn-send-otp');
+
+      if (!phone || phone.replace(/[^0-9]/g, '').length < 9) {
+        alert('⚠️ 請輸入有效的手機號碼 (例如: 0912-345-678)！');
+        phoneInput.focus();
+        return;
+      }
+
+      sendBtn.disabled = true;
+      sendBtn.innerText = '⏳ 發送中...';
+
+      try {
+        let debugCode = '654321';
+        try {
+          const res = await fetch('/api/auth/send-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, purpose: 'REGISTER' })
+          });
+          const data = await res.json();
+          if (data.debugOtp) debugCode = data.debugOtp;
+        } catch (e) {
+          console.warn('API /api/auth/send-otp offline or CORS, using local mock generator:', e);
+          debugCode = Math.floor(100000 + Math.random() * 900000).toString();
+        }
+
+        lastDebugOtp = debugCode;
+        const smsBox = document.getElementById('sms-notification-box');
+        const smsText = document.getElementById('sms-message-text');
+        smsText.innerHTML = `【順路快遞平台】您的 6 位數動態驗證碼為 <b class="text-amber-300 font-mono text-sm tracking-wider">${debugCode}</b>，5分鐘內有效。切勿告知他人。(測試亦可輸入 654321)`;
+        smsBox.classList.remove('hidden');
+        document.getElementById('btn-autofill-otp').classList.remove('hidden');
+
+        // 啟動 60 秒倒數
+        let countdown = 60;
+        sendBtn.innerText = `⏳ ${countdown}s`;
+        if (otpCountdownTimer) clearInterval(otpCountdownTimer);
+        otpCountdownTimer = setInterval(() => {
+          countdown--;
+          if (countdown <= 0) {
+            clearInterval(otpCountdownTimer);
+            sendBtn.disabled = false;
+            sendBtn.innerText = '📲 重新發送';
+          } else {
+            sendBtn.innerText = `⏳ ${countdown}s`;
+          }
+        }, 1000);
+
+      } catch (err) {
+        alert('發送驗證碼失敗：' + err.message);
+        sendBtn.disabled = false;
+        sendBtn.innerText = '📲 發送驗證碼';
+      }
+    }
+
+    function fillDebugOtp() {
+      if (lastDebugOtp) {
+        document.getElementById('auth-input-otp').value = lastDebugOtp;
+      }
+    }
+
+    async function handleVerifyOtpAndLogin() {
+      const name = document.getElementById('auth-input-name').value.trim() || '順路用戶';
+      const phone = document.getElementById('auth-input-phone').value.trim();
+      const role = document.getElementById('auth-select-role').value;
+      const otp = document.getElementById('auth-input-otp').value.trim();
+      const verifyBtn = document.getElementById('btn-submit-auth');
+
+      if (!phone) {
+        alert('⚠️ 請輸入手機號碼！');
+        return;
+      }
+      if (!otp) {
+        alert('⚠️ 請輸入 6 位數簡訊 OTP 驗證碼！');
+        return;
+      }
+
+      verifyBtn.disabled = true;
+      verifyBtn.innerText = '⏳ 正在向電信安全閘道驗證 OTP...';
+
+      try {
+        let authResult = null;
+        try {
+          const res = await fetch('/api/auth/verify-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, otp, name, preferredRole: role })
+          });
+          authResult = await res.json();
+        } catch (e) {
+          console.warn('API /api/auth/verify-otp offline or fallback:', e);
+          if (otp === '654321' || otp === lastDebugOtp) {
+            authResult = {
+              success: true,
+              isNewUser: true,
+              session: {
+                token: 'MOCK_TOKEN_' + Date.now(),
+                user: {
+                  id: 'USR_' + Date.now(),
+                  name,
+                  phone,
+                  roles: role === 'ALL' ? ['SENDER', 'TRAVELER', 'RECIPIENT'] : [role],
+                  isPhoneVerified: true,
+                  kycLevel: 'PHONE_VERIFIED',
+                  walletBalanceTwd: 1000,
+                  createdAt: new Date().toISOString()
+                }
+              }
+            };
+          } else {
+            authResult = { success: false, message: '驗證碼錯誤，請重新確認！' };
+          }
+        }
+
+        if (!authResult.success) {
+          alert(`❌ 驗證失敗: ${authResult.message}`);
+          verifyBtn.disabled = false;
+          verifyBtn.innerText = '✅ 確認驗證並啟用帳號 (登入)';
+          return;
+        }
+
+        // 登入成功
+        currentAuthToken = authResult.session.token;
+        currentUser = authResult.session.user;
+        localStorage.setItem('courier_user_session', JSON.stringify({
+          token: currentAuthToken,
+          user: currentUser
+        }));
+
+        updateAuthUI();
+        closeAuthModal();
+
+        alert(`🎉 手機動態 OTP 驗證成功！\n歡迎【${currentUser.name}】取得平台實名認證 (KYC L1)！\n🎁 新戶體驗金 NT$ 1,000 已匯入您的 Escrow 錢包。您現在可以自由登出、發布託運委託或順路接單面交！`);
+      } catch (err) {
+        alert('驗證程序發生異常：' + err.message);
+      } finally {
+        verifyBtn.disabled = false;
+        verifyBtn.innerText = '✅ 確認驗證並啟用帳號 (登入)';
+      }
+    }
+
+    async function handleQuickDemoLogin() {
+      try {
+        let authResult = null;
+        try {
+          const res = await fetch('/api/auth/verify-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone: '0912345678',
+              otp: '654321',
+              name: '林晨旅 (示範旅人/寄件者)',
+              preferredRole: 'ALL'
+            })
+          });
+          authResult = await res.json();
+        } catch (e) {
+          authResult = {
+            success: true,
+            session: {
+              token: 'DEMO_TOKEN_123',
+              user: {
+                id: 'USR_DEMO_01',
+                name: '林晨旅 (示範旅人/寄件者)',
+                phone: '0912345678',
+                roles: ['TRAVELER', 'SENDER', 'RECIPIENT'],
+                isPhoneVerified: true,
+                kycLevel: 'PHONE_VERIFIED',
+                walletBalanceTwd: 1000
+              }
+            }
+          };
+        }
+
+        currentAuthToken = authResult.session.token;
+        currentUser = authResult.session.user;
+        localStorage.setItem('courier_user_session', JSON.stringify({
+          token: currentAuthToken,
+          user: currentUser
+        }));
+
+        updateAuthUI();
+        closeAuthModal();
+        alert('⚡ 已快速切換為示範帳號：林晨旅 (0912-345-678)！');
+      } catch (e) {
+        alert('快速登入失敗: ' + e.message);
+      }
+    }
+
+    async function handleLogout() {
+      if (!confirm('您確定要登出當前實名帳號嗎？\n登出後回到訪客模式，需再次以手機 OTP 驗證方可發布或接單操作。')) {
+        return;
+      }
+
+      if (currentAuthToken) {
+        try {
+          await fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${currentAuthToken}` }
+          });
+        } catch (e) {
+          // ignore offline
+        }
+      }
+
+      localStorage.removeItem('courier_user_session');
+      currentUser = null;
+      currentAuthToken = '';
+      updateAuthUI();
+
+      alert('🚪 已安全登出！\n目前已恢復為訪客模式，所有訂單操作需先重新通過手機 OTP 驗證。');
+    }
+
+    async function initAuth() {
+      const saved = localStorage.getItem('courier_user_session');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          currentUser = parsed.user;
+          currentAuthToken = parsed.token;
+          updateAuthUI();
+
+          // 異步向後端校驗
+          try {
+            const res = await fetch('/api/auth/me', {
+              headers: { Authorization: `Bearer ${currentAuthToken}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.user) {
+                currentUser = data.user;
+                if (data.wallet) currentUser.walletBalanceTwd = data.wallet.balanceTwd;
+                updateAuthUI();
+              }
+            } else if (res.status === 401) {
+              // 憑證過期
+              currentUser = null;
+              currentAuthToken = '';
+              localStorage.removeItem('courier_user_session');
+              updateAuthUI();
+            }
+          } catch (e) {
+            console.log('Backend sync skipped in offline mode');
+          }
+        } catch (e) {
+          localStorage.removeItem('courier_user_session');
+        }
+      }
+    }
+
+    // ==========================================
+    // 訂單發布與旅人操作攔截守衛 (Guarded Actions)
+    // ==========================================
     function submitShipmentOrder() {
-      alert('🎉 訂單發布成功！已完成 AI 初步安全合規審核，款項已安全鎖定於平台 Escrow 資金託管中！');
+      // 權限守衛：初次使用需先通過手機 OTP 驗證
+      if (!currentUser) {
+        alert('⚠️ 依平台安全與風控規範：\n初次使用發布寄件委託前，請先申請帳號並通過【手機 OTP 動態驗證】！');
+        openAuthModal('REGISTER');
+        return;
+      }
+
+      const title = document.getElementById('input-title').value;
+      const totalQuote = document.getElementById('quote-total').innerText;
+      
+      alert(`🎉 委託發布成功！\n寄件人: ${currentUser.name} (${formatPhoneDisplay(currentUser.phone)})\n項目: ${title}\n預估總額: NT$ ${totalQuote}\n\n已通過 AI 安全合規審核，款項已安全鎖定於平台 Escrow 資金託管中，順路旅人將於接單大廳即時收到推播！`);
       switchTab('traveler');
     }
 
     function handleVerifyPickup() {
+      // 權限守衛：旅人接單前需已通過手機 OTP 驗證
+      if (!currentUser) {
+        alert('⚠️ 依平台安全規範：\n順路旅人執行取件與開箱防調包驗視前，請先以手機 OTP 登入實名帳號！');
+        openAuthModal('LOGIN');
+        return;
+      }
+
       const otp = document.getElementById('input-pickup-otp').value.trim();
       if (otp !== '382104') {
-        alert('❌ 取件驗證碼錯誤！請與寄件人核對。');
+        alert('❌ 取件驗證碼錯誤！請與寄件人現場核對 6 位數取件 OTP。');
         return;
       }
       currentStep = 1;
       document.getElementById('step-0').className = 'text-emerald-400 font-bold';
       document.getElementById('step-1').className = 'text-emerald-400 font-bold';
       document.getElementById('btn-verify-pickup').disabled = true;
-      document.getElementById('btn-verify-pickup').innerText = '已驗證啟程';
+      document.getElementById('btn-verify-pickup').innerText = `已驗證啟程 (經手旅人: ${currentUser.name})`;
       document.getElementById('btn-verify-pickup').className = 'px-4 py-2 bg-slate-800 text-slate-500 text-xs font-semibold rounded-lg cursor-not-allowed';
 
       const statusBox = document.getElementById('flow-status');
       statusBox.className = 'p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 flex items-center gap-2';
-      statusBox.innerHTML = '<span>🚀</span><span>包裹運送中 [IN_TRANSIT]！已建立開箱防調包基準照片。抵達目的地後請與收件人進行現場拆箱並執行雙照比對。</span>';
+      statusBox.innerHTML = `<span>🚀</span><span>包裹運送中 [IN_TRANSIT]！經手旅人【${currentUser.name}】已建立開箱防調包基準照。抵達後請與收件人碰面執行拆箱雙照比對。</span>`;
     }
 
     function triggerPhotoConsistencyCheck() {
+      if (!currentUser) {
+        alert('⚠️ 執行雙照審核前，請先以手機 OTP 登入實名帳號！');
+        openAuthModal('LOGIN');
+        return;
+      }
+
       if (currentStep < 1) {
         alert('⚠️ 請先完成階段一取件開箱驗視與 OTP 驗證！');
         return;
@@ -799,6 +1185,12 @@
     }
 
     function handleVerifyDropoff() {
+      if (!currentUser) {
+        alert('⚠️ 現場收件簽收前，請先以手機 OTP 登入實名帳號！');
+        openAuthModal('LOGIN');
+        return;
+      }
+
       if (currentStep < 2) {
         alert('⚠️ 系統安全阻擋：未通過雙照一致性審核前，禁止簽收與解鎖資金！');
         return;
@@ -813,13 +1205,21 @@
       document.getElementById('btn-verify-dropoff').innerText = '簽收完成';
       document.getElementById('btn-verify-dropoff').disabled = true;
 
+      // 模擬 Escrow 結算撥款
+      const rewardTwd = 105;
+      if (currentUser) {
+        currentUser.walletBalanceTwd = (currentUser.walletBalanceTwd || 1000) + rewardTwd;
+        updateAuthUI();
+      }
+
       const statusBox = document.getElementById('flow-status');
       statusBox.className = 'p-3.5 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 font-semibold flex items-center gap-2';
-      statusBox.innerHTML = '<span>🏆</span><span>簽收成功 [DELIVERED]！雙照存證一致，平台 Escrow 資金託管已即時解鎖分帳，收益已撥入旅人錢包！</span>';
+      statusBox.innerHTML = `<span>🏆</span><span>簽收成功 [DELIVERED]！雙照存證一致，平台 Escrow 資金託管已即時解鎖分帳，順路報酬 +NT$ ${rewardTwd} 已撥入旅人【${currentUser.name}】錢包！</span>`;
     }
 
-    // 初始化
+    // 初始化運具模式與帳號狀態
     selectMode('MOTORCYCLE');
+    initAuth();
 
     // 註冊 PWA Service Worker
     if ('serviceWorker' in navigator) {
@@ -830,5 +1230,102 @@
       });
     }
   </script>
+
+  <!-- ========================================== -->
+  <!-- 彈出視窗：初次使用手機 OTP 帳號申請與登入 Modal -->
+  <!-- ========================================== -->
+  <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-slate-100 relative">
+      
+      <!-- 關閉按鈕 -->
+      <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg p-1.5 rounded-lg hover:bg-slate-800">
+        ✕
+      </button>
+
+      <!-- 標題 -->
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">📱</span>
+          <h3 id="modal-title-text" class="text-base md:text-lg font-bold text-white">初次使用手機 OTP 帳號申請</h3>
+        </div>
+        <p class="text-xs text-slate-400 mt-1">無論是寄件人、順路旅人或收件者，初次使用皆須完成手機動態 OTP 驗證以取得實名帳號。</p>
+      </div>
+
+      <!-- 優惠提示徽章 -->
+      <div class="p-3 rounded-xl bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 text-xs text-blue-200 flex items-center gap-2.5">
+        <span class="text-xl">🎁</span>
+        <div>
+          <span class="font-bold text-white">新戶實名禮遇：</span>
+          <span>通過手機動態驗證即開立 Escrow 錢包並贈送 <b class="text-amber-400 font-semibold">NT$ 1,000</b> 平台體驗金！</span>
+        </div>
+      </div>
+
+      <!-- 表單內容 -->
+      <div class="space-y-3 text-xs">
+        <!-- 姓名 / 稱呼 -->
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">真實姓名 / 稱呼</label>
+          <input type="text" id="auth-input-name" placeholder="例如：陳大明" value="陳小華" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+
+        <!-- 偏好身分角色 -->
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">初次使用主要身分角色</label>
+          <select id="auth-select-role" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <option value="ALL">🌟 全功能自由通用 (寄件・順路旅人・收件)</option>
+            <option value="SENDER">📦 寄件委託者 (跨城/跨國寄件託運需求)</option>
+            <option value="TRAVELER">🛵 順路旅人／騎士 (閒置行李空間共享賺補貼)</option>
+            <option value="RECIPIENT">📬 收件確認者 (終點現場雙照拆箱簽收)</option>
+          </select>
+        </div>
+
+        <!-- 手機號碼輸入與發送 OTP -->
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">台灣手機號碼 (接收動態簡訊碼)</label>
+          <div class="flex gap-2">
+            <input type="tel" id="auth-input-phone" placeholder="0912-345-678" value="0988-123-456" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <button type="button" onclick="handleSendOtp()" id="btn-send-otp" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shrink-0 transition-all text-xs">
+              📲 發送驗證碼
+            </button>
+          </div>
+        </div>
+
+        <!-- 模擬簡訊即時預覽通知框 -->
+        <div id="sms-notification-box" class="hidden p-3 rounded-xl bg-slate-950 border border-indigo-500/40 text-[11px] text-slate-300 space-y-1">
+          <div class="flex items-center justify-between text-indigo-400 font-semibold">
+            <span class="flex items-center gap-1"><span>📩</span><span>模擬電信簡訊中心即時到件</span></span>
+            <span class="text-[10px] text-slate-400 font-mono">剛剛</span>
+          </div>
+          <p class="font-mono text-white bg-slate-900 p-2 rounded border border-slate-800" id="sms-message-text">
+            【順路快遞平台】您的驗證碼為 <b>839201</b>，5分鐘內有效。
+          </p>
+          <p class="text-[10px] text-slate-400">💡 開發測試模式：可點擊右側「一鍵填入」或輸入「654321」直接通行。</p>
+        </div>
+
+        <!-- OTP 驗證碼輸入 -->
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">6 位數簡訊動態驗證碼 (OTP)</label>
+          <div class="flex gap-2">
+            <input type="text" id="auth-input-otp" maxlength="6" placeholder="請輸入 6 位數驗證碼" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-center font-mono tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <button type="button" onclick="fillDebugOtp()" id="btn-autofill-otp" class="hidden px-3 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-lg shrink-0 text-xs font-semibold">
+              一鍵填入
+            </button>
+          </div>
+        </div>
+
+        <!-- 驗證並登入按鈕 -->
+        <div class="pt-2 space-y-2">
+          <button type="button" onclick="handleVerifyOtpAndLogin()" id="btn-submit-auth" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/20 text-xs md:text-sm transition-all flex items-center justify-center gap-2">
+            <span>✅</span><span>確認驗證並啟用帳號 (登入)</span>
+          </button>
+          
+          <button type="button" onclick="handleQuickDemoLogin()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl text-xs transition-all border border-slate-700 flex items-center justify-center gap-1.5">
+            <span>⚡</span><span>一鍵切換至預設示範帳號 (林晨旅 0912-345-678)</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
 </body>
 </html>

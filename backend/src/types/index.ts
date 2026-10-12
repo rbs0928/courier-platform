@@ -246,3 +246,40 @@ export interface MatchResult {
   pricingQuote: PricingQuote;
   matchReasons: string[];
 }
+
+// -------------------------------------------------------------
+// 用戶帳號、實名驗證 (KYC) 與 手機動態 OTP 驗證型別
+// -------------------------------------------------------------
+export type UserRole = 'SENDER' | 'TRAVELER' | 'RECIPIENT' | 'ALL';
+
+export interface UserAccount {
+  id: string;
+  phone: string;
+  name: string;
+  roles: UserRole[];
+  isPhoneVerified: boolean;
+  kycLevel: 'UNVERIFIED' | 'PHONE_VERIFIED' | 'ID_VERIFIED';
+  rating: number;
+  walletBalanceTwd: number;
+  createdAt: string;
+  lastLoginAt: string;
+}
+
+export interface AuthSession {
+  token: string;
+  user: UserAccount;
+  expiresAt: string;
+}
+
+export interface SendOtpRequest {
+  phone: string;
+  purpose: 'REGISTER' | 'LOGIN';
+}
+
+export interface VerifyOtpRequest {
+  phone: string;
+  otp: string;
+  name?: string;
+  preferredRole?: UserRole;
+}
+

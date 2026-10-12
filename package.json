@@ -9,8 +9,9 @@
     "test:pricing": "agy-node --experimental-strip-types backend/tests/pricing.test.ts",
     "test:matching": "agy-node --experimental-strip-types backend/tests/corridor_matching.test.ts",
     "test:compliance": "agy-node --experimental-strip-types backend/tests/compliance_and_safety.test.ts",
+    "test:auth": "agy-node --experimental-strip-types backend/tests/auth.test.ts",
     "test:api": "agy-node --experimental-strip-types backend/tests/api_server.test.ts",
-    "test": "npm run test:pricing && npm run test:matching && npm run test:compliance && npm run test:api",
+    "test": "npm run test:pricing && npm run test:matching && npm run test:compliance && npm run test:auth && npm run test:api",
     "demo": "agy-node --experimental-strip-types scripts/demo_simulation.ts"
   },
   "keywords": [

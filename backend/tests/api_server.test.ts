@@ -78,6 +78,51 @@ server.listen(TEST_PORT, async () => {
     assert.ok(mapsJson.data.length > 0, '應成功返回 Google Places 建議候選');
     console.log(`✅ GET /api/maps/places/autocomplete 通過 (搜尋命中 ${mapsJson.data.length} 處地點)`);
 
+    // 8. 測試 /api/auth/send-otp 發送手機驗證碼
+    const otpRes = await fetch(`${baseUrl}/api/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: '0977-888-999', purpose: 'REGISTER' }),
+    });
+    const otpJson = await otpRes.json();
+    assert.strictEqual(otpRes.status, 200);
+    assert.ok(otpJson.debugOtp, '應回傳動態驗證碼供客戶端模擬驗收');
+    console.log(`✅ POST /api/auth/send-otp 通過 (產生驗證碼: ${otpJson.debugOtp})`);
+
+    // 9. 測試 /api/auth/verify-otp 完成新用戶手機驗證與帳號啟用
+    const verifyRes = await fetch(`${baseUrl}/api/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: '0977-888-999',
+        otp: otpJson.debugOtp,
+        name: '陳小美 (寄件兼收件人)',
+        preferredRole: 'SENDER',
+      }),
+    });
+    const verifyJson = await verifyRes.json();
+    assert.strictEqual(verifyRes.status, 200);
+    assert.ok(verifyJson.session && verifyJson.session.token, '應核發 Session Token');
+    assert.strictEqual(verifyJson.session.user.isPhoneVerified, true, '手機狀態應為已驗證');
+    console.log(`✅ POST /api/auth/verify-otp 通過 (用戶 [${verifyJson.session.user.name}] 成功註冊啟用帳號)`);
+
+    // 10. 測試 /api/auth/me 憑 Token 查詢當前登入者
+    const meRes = await fetch(`${baseUrl}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${verifyJson.session.token}` },
+    });
+    const meJson = await meRes.json();
+    assert.strictEqual(meRes.status, 200);
+    assert.strictEqual(meJson.user.name, '陳小美 (寄件兼收件人)');
+    console.log('✅ GET /api/auth/me 憑 Token 驗證當前登入者資訊通過');
+
+    // 11. 測試 /api/auth/logout 安全登出
+    const logoutRes = await fetch(`${baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${verifyJson.session.token}` },
+    });
+    assert.strictEqual(logoutRes.status, 200);
+    console.log('✅ POST /api/auth/logout 安全登出通過');
+
     console.log('\n🎉 所有 [API Server] 整合測試均順利通過！');
   } catch (err) {
     console.error('❌ API 測試失敗:', err);
