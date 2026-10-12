@@ -130,4 +130,14 @@ export class EscrowWalletService {
   public getPlatformRevenue(): number {
     return this.platformTotalRevenueTwd;
   }
+
+  /**
+   * 金流儲值加值 (信用卡 / Line Pay / 虛擬 ATM)
+   */
+  public topupWallet(userId: string, amount: number, paymentMethod: string): { wallet: WalletAccount; txId: string } {
+    const wallet = this.getOrCreateWallet(userId, '用戶');
+    wallet.balanceTwd += amount;
+    const txId = `TOPUP_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    return { wallet, txId };
+  }
 }

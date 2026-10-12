@@ -221,4 +221,14 @@ export class AuthService {
   public getAllUsers(): UserAccount[] {
     return Array.from(this.usersById.values());
   }
+
+  /**
+   * 更新用戶錢包餘額
+   */
+  public updateUserWallet(userId: string, newBalance: number): void {
+    const user = this.usersById.get(userId);
+    if (user) {
+      user.walletBalanceTwd = newBalance;
+    }
+  }
 }

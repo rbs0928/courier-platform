@@ -115,6 +115,20 @@ server.listen(TEST_PORT, async () => {
     assert.strictEqual(meJson.user.name, '陳小美 (寄件兼收件人)');
     console.log('✅ GET /api/auth/me 憑 Token 驗證當前登入者資訊通過');
 
+    // 10.1 測試 /api/escrow/topup 模擬線上金流儲值
+    const topupRes = await fetch(`${baseUrl}/api/escrow/topup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${verifyJson.session.token}`,
+      },
+      body: JSON.stringify({ amount: 1500, paymentMethod: 'CREDIT_CARD' }),
+    });
+    const topupJson = await topupRes.json();
+    assert.strictEqual(topupRes.status, 200);
+    assert.strictEqual(topupJson.newBalance, 2500, '儲值 1500 + 原體驗金 1000 應為 2500');
+    console.log(`✅ POST /api/escrow/topup 通過 (金流儲值 NT$ 1,500 成功，新餘額: NT$ ${topupJson.newBalance})`);
+
     // 11. 測試 /api/auth/logout 安全登出
     const logoutRes = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',

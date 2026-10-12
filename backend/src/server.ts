@@ -167,6 +167,31 @@ export function createServer(): http.Server {
         return sendJson(res, 200, { success: true, data: authService.getAllUsers() });
       }
 
+      // 1.6 線上金流儲值沙盒 (信用卡 / Line Pay / 虛擬 ATM)
+      if (pathname === '/api/escrow/topup' && method === 'POST') {
+        const authHeader = req.headers.authorization;
+        const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+        const currentUser = authService.getUserByToken(token);
+        if (!currentUser) {
+          return sendJson(res, 401, { success: false, message: '請先以手機 OTP 登入實名帳號後再進行儲值充值' });
+        }
+        const body = await parseJsonBody(req);
+        const amount = Number(body.amount) || 0;
+        if (amount <= 0 || amount > 100000) {
+          return sendJson(res, 400, { success: false, message: '單筆儲值金額需大於 0 且小於 NT$ 100,000' });
+        }
+        const paymentMethod = body.paymentMethod || 'CREDIT_CARD';
+        const { wallet, txId } = escrowService.topupWallet(currentUser.id, amount, paymentMethod);
+        authService.updateUserWallet(currentUser.id, wallet.balanceTwd);
+        return sendJson(res, 200, {
+          success: true,
+          message: `線上金流驗證成功！已透過【${paymentMethod === 'LINE_PAY' ? 'LINE Pay' : paymentMethod === 'ATM' ? '虛擬 ATM' : '信用卡 3D Secure'}】儲值 NT$ ${amount.toLocaleString()}`,
+          txId,
+          newBalance: wallet.balanceTwd,
+          user: currentUser,
+        });
+      }
+
       // 2. 取得大眾運輸與航空樞紐站點
       if (pathname === '/api/hubs' && method === 'GET') {
         return sendJson(res, 200, { success: true, data: MAJOR_HUBS });
