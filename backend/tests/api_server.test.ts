@@ -138,6 +138,46 @@ server.listen(TEST_PORT, async () => {
     assert.ok(getMsgJson.data.length >= 2, '應包含系統初始訊息與旅人發送訊息');
     console.log(`✅ /api/shipments/:id/messages 三方即時雙向溝通訊息收發通過 (目前 ${getMsgJson.data.length} 則通訊紀錄)`);
 
+    // 5.5 測試媒合後寄貨人回報即時定位，旅人端依照定位取得寄貨人與收貨人位置並推算取件剩餘時間
+    const senderLocRes = await fetch(`${baseUrl}/api/shipments/${createdShipmentId}/live-location`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: 'SENDER',
+        lat: 25.045610,
+        lng: 121.517890,
+        addressDescription: '台北車站 M8 出口前 (寄貨人已就位)',
+      }),
+    });
+    const senderLocJson = await senderLocRes.json();
+    assert.strictEqual(senderLocRes.status, 200);
+    assert.strictEqual(senderLocJson.data.targetPhase, 'APPROACHING_PICKUP');
+    assert.ok(senderLocJson.data.remainingMinutes > 0, '應推算出取件剩餘時間');
+    console.log(`✅ POST /api/shipments/:id/live-location 寄貨人即時定位成功回報 (推算取件剩餘時間: ${senderLocJson.data.remainingMinutes} 分鐘)`);
+
+    // 5.6 測試旅人回報即時 GPS 定位，收貨人端查詢最新實時追蹤與動態送達時間 (Dynamic ETA)
+    const travelerLocRes = await fetch(`${baseUrl}/api/shipments/${createdShipmentId}/live-location`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: 'TRAVELER',
+        lat: 25.043000,
+        lng: 121.545000, // 接近忠孝敦化
+        speedKmh: 35,
+        addressDescription: '往台北 101 移動中',
+      }),
+    });
+    const travelerLocJson = await travelerLocRes.json();
+    assert.strictEqual(travelerLocRes.status, 200);
+    assert.ok(travelerLocJson.data.travelerLiveLocation, '應具備旅人最新即時座標');
+
+    const trackingGetRes = await fetch(`${baseUrl}/api/shipments/${createdShipmentId}/live-tracking`);
+    const trackingGetJson = await trackingGetRes.json();
+    assert.strictEqual(trackingGetRes.status, 200);
+    assert.ok(trackingGetJson.data.remainingDistanceKm > 0, '應能取得即時剩餘距離');
+    assert.ok(trackingGetJson.data.estimatedArrivalTime.includes(':'), '應能推算預計到達時刻');
+    console.log(`✅ GET /api/shipments/:id/live-tracking 收貨人與旅人端即時追蹤查詢通過 (距目標: ${trackingGetJson.data.remainingDistanceKm} km, 預計 ${trackingGetJson.data.estimatedArrivalTime} 抵達)`);
+
     // 6. 測試 /api/compliance/regulations 航空各國法規庫
     const regsRes = await fetch(`${baseUrl}/api/compliance/regulations`);
     const regsJson = await regsRes.json();

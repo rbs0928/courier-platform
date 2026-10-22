@@ -331,5 +331,59 @@ export interface TripartiteShipmentInfo {
     transportMode?: TransportMode;
     tripNumber?: string;
   };
+  trackingSummary?: {
+    remainingDistanceKm: number;
+    remainingMinutes: number;
+    etaStatusText: string;
+  };
 }
+
+// -------------------------------------------------------------
+// 即時定位 (Live GPS) 與動態剩餘時間推算 (Dynamic ETA) 模型
+// -------------------------------------------------------------
+export interface LiveLocationUpdate {
+  role: 'SENDER' | 'TRAVELER';
+  lat: number;
+  lng: number;
+  speedKmh?: number;
+  heading?: number;
+  addressDescription?: string;
+  timestamp: string;
+}
+
+export interface LiveTrackingState {
+  shipmentId: string;
+  status: ShipmentStatus;
+  transportMode: TransportMode;
+  targetPhase: 'APPROACHING_PICKUP' | 'IN_TRANSIT_DROPOFF' | 'COMPLETED';
+
+  // 寄件人即時定位
+  senderLiveLocation?: {
+    lat: number;
+    lng: number;
+    updatedAt: string;
+    addressDescription?: string;
+  };
+
+  // 旅人即時定位
+  travelerLiveLocation?: {
+    lat: number;
+    lng: number;
+    speedKmh: number;
+    updatedAt: string;
+    addressDescription?: string;
+  };
+
+  // 收件人終點面交定位
+  recipientLocation: LocationPoint;
+
+  // 動態推算剩餘時間與距離指標 (Dynamic ETA)
+  remainingDistanceKm: number;      // 即時剩餘距離 (公里)
+  remainingMinutes: number;         // 即時動態推算之剩餘時間 (分鐘)
+  estimatedArrivalTime: string;     // 預估送達/會面時間 (例如 '15:45')
+  averageSpeedKmh: number;          // 估算運具基準時速
+  etaStatusText: string;            // 繁體中文即時狀態指引
+  lastCalculatedAt: string;         // 計算時間戳
+}
+
 

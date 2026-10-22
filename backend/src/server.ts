@@ -8,12 +8,23 @@ import { PricingEngine } from './modules/pricing/PricingEngine.ts';
 import { EscrowWalletService } from './modules/escrow/EscrowWalletService.ts';
 import { AuthService } from './modules/auth/AuthService.ts';
 import { MAJOR_HUBS } from './database/StationHubs.ts';
-import type { Itinerary, PackageShipment, TransportMode, UserAccount, ShipmentMessage, TripartiteShipmentInfo } from './types/index.ts';
+import { DynamicEtaEngine } from './modules/tracking/DynamicEtaEngine.ts';
+import type {
+  Itinerary,
+  PackageShipment,
+  TransportMode,
+  UserAccount,
+  ShipmentMessage,
+  TripartiteShipmentInfo,
+  LiveLocationUpdate,
+  LiveTrackingState,
+} from './types/index.ts';
 
 const store = new InMemoryStore();
 const escrowService = new EscrowWalletService();
 const authService = new AuthService();
 const shipmentMessages = new Map<string, ShipmentMessage[]>();
+const shipmentLiveLocations = new Map<string, { sender?: LiveLocationUpdate; traveler?: LiveLocationUpdate }>();
 
 function parseJsonBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -466,6 +477,13 @@ export function createServer(): http.Server {
         const travelerUser = shipment.assignedTravelerId ? authService.getUserById(shipment.assignedTravelerId) : null;
         const itinerary = shipment.assignedItineraryId ? store.getItinerary(shipment.assignedItineraryId) : null;
 
+        const locEntry = shipmentLiveLocations.get(shipmentId);
+        const trackingState = DynamicEtaEngine.computeTrackingState({
+          shipment,
+          senderLiveUpdate: locEntry?.sender,
+          travelerLiveUpdate: locEntry?.traveler,
+        });
+
         const tripartiteInfo: TripartiteShipmentInfo = {
           shipmentId: shipment.id,
           title: shipment.title,
@@ -490,9 +508,14 @@ export function createServer(): http.Server {
             transportMode: itinerary?.transportMode || shipment.transportModePreference,
             tripNumber: itinerary?.tripNumber,
           } : undefined,
+          trackingSummary: {
+            remainingDistanceKm: trackingState.remainingDistanceKm,
+            remainingMinutes: trackingState.remainingMinutes,
+            etaStatusText: trackingState.etaStatusText,
+          },
         };
 
-        return sendJson(res, 200, { success: true, data: tripartiteInfo });
+        return sendJson(res, 200, { success: true, data: tripartiteInfo, trackingState });
       }
 
       // 10.2 取得三方即時溝通訊息列表 (旅人 ↔ 寄出人 ↔ 收貨人)
@@ -560,6 +583,78 @@ export function createServer(): http.Server {
         return sendJson(res, 201, { success: true, message: '訊息已成功送達三方溝通板', data: newMsg });
       }
 
+      // 10.4 回報即時定位 API (旅人即時 GPS 或 寄件人即時定位)
+      const liveLocPostMatch = pathname.match(/^\/api\/shipments\/([^/]+)\/live-location$/);
+      if (liveLocPostMatch && method === 'POST') {
+        const shipmentId = liveLocPostMatch[1];
+        const shipment = store.getShipment(shipmentId);
+        if (!shipment) {
+          return sendJson(res, 404, { success: false, message: '找不到指定包裹' });
+        }
+
+        const body = await parseJsonBody(req);
+        const role = body.role === 'SENDER' ? 'SENDER' : 'TRAVELER';
+        const lat = Number(body.lat);
+        const lng = Number(body.lng);
+
+        if (isNaN(lat) || isNaN(lng)) {
+          return sendJson(res, 400, { success: false, message: '請提供有效的經緯度坐標 (lat, lng)' });
+        }
+
+        const update: LiveLocationUpdate = {
+          role,
+          lat,
+          lng,
+          speedKmh: typeof body.speedKmh === 'number' ? body.speedKmh : undefined,
+          heading: typeof body.heading === 'number' ? body.heading : undefined,
+          addressDescription: body.addressDescription,
+          timestamp: new Date().toISOString(),
+        };
+
+        const currentEntry = shipmentLiveLocations.get(shipmentId) || {};
+        if (role === 'SENDER') {
+          currentEntry.sender = update;
+        } else {
+          currentEntry.traveler = update;
+        }
+        shipmentLiveLocations.set(shipmentId, currentEntry);
+
+        // 依據最新即時定位動態推算寄貨所剩餘時間與距離
+        const trackingState = DynamicEtaEngine.computeTrackingState({
+          shipment,
+          senderLiveUpdate: currentEntry.sender,
+          travelerLiveUpdate: currentEntry.traveler,
+        });
+
+        return sendJson(res, 200, {
+          success: true,
+          message: `即時定位已更新 [${role}]！目前距離目標剩餘 ${trackingState.remainingDistanceKm} km，預估剩餘 ${trackingState.remainingMinutes} 分鐘。`,
+          data: trackingState,
+        });
+      }
+
+      // 10.5 查詢包裹最新實時定位與動態 ETA 追蹤 (供收貨人、寄件人與旅人查詢)
+      const liveTrackingGetMatch = pathname.match(/^\/api\/shipments\/([^/]+)\/live-tracking$/);
+      if (liveTrackingGetMatch && method === 'GET') {
+        const shipmentId = liveTrackingGetMatch[1];
+        const shipment = store.getShipment(shipmentId);
+        if (!shipment) {
+          return sendJson(res, 404, { success: false, message: '找不到指定包裹' });
+        }
+
+        const currentEntry = shipmentLiveLocations.get(shipmentId);
+        const trackingState = DynamicEtaEngine.computeTrackingState({
+          shipment,
+          senderLiveUpdate: currentEntry?.sender,
+          travelerLiveUpdate: currentEntry?.traveler,
+        });
+
+        return sendJson(res, 200, {
+          success: true,
+          data: trackingState,
+        });
+      }
+
       // 11. 實體開箱驗視與取件 OTP 驗證 (進入運送中)
       const inspectPickupMatch = pathname.match(/^\/api\/shipments\/([^/]+)\/inspect-and-pickup$/);
       if (inspectPickupMatch && method === 'POST') {
@@ -572,7 +667,7 @@ export function createServer(): http.Server {
 
         const verifyResult = ComplianceAndSafetyModule.verifyPickupAndInspection({
           shipment,
-          travelerId: body.travelerId,
+          travelerId: body.travelerId || shipment.assignedTravelerId || '',
           inputOtp: body.otp,
           checklist: body.checklist,
           photoUrls: body.photoUrls,
@@ -601,7 +696,7 @@ export function createServer(): http.Server {
 
         const verifyResult = ComplianceAndSafetyModule.verifyDropoff({
           shipment,
-          travelerId: body.travelerId,
+          travelerId: body.travelerId || shipment.assignedTravelerId || '',
           inputOtp: body.otp,
           photoUrls: body.photoUrls,
         });

@@ -389,5 +389,46 @@ export class InMemoryStore {
       createdAt: now.toISOString(),
     };
     this.saveShipment(shipmentMoto);
+
+    // 示範追蹤與三方溝通標準示範包裹 PKG_202610_8829 (機車同城直送)
+    const demoQuote = PricingEngine.calculateQuote({
+      transportMode: 'MOTORCYCLE',
+      distanceKm: 6.5,
+      weightKg: 2.5,
+      declaredValueTwd: 1200,
+    });
+    const shipmentDemo: PackageShipment = {
+      id: 'PKG_202610_8829',
+      senderId: 'USR_SENDER_01',
+      senderName: '陳小美',
+      senderPhone: '0977-888-999',
+      recipientName: '李明軒 (特助)',
+      recipientPhone: '0933-777-888',
+      title: '現做生乳捲禮盒與公務文件',
+      description: '需平放防撞，當面點交',
+      category: 'FOOD_PACKAGED',
+      weightKg: 2.5,
+      declaredValue: 1200,
+      pickupLocation: {
+        name: '台北車站 M8 出口前 (公園路)',
+        address: '台北市中正區公園路20號',
+        lat: 25.045610,
+        lng: 121.517890,
+      },
+      dropoffLocation: {
+        name: '台北 101 大樓 1 樓松智路門市大廳會面點',
+        address: '台北市信義區信義路五段7號',
+        lat: 25.033964,
+        lng: 121.564472,
+      },
+      assignedTravelerId: 'USR_DEMO_01',
+      transportModePreference: 'MOTORCYCLE',
+      status: 'ACCEPTED',
+      pickupOtp: '382104',
+      dropoffOtp: '991205',
+      pricingQuote: demoQuote,
+      createdAt: now.toISOString(),
+    };
+    this.saveShipment(shipmentDemo);
   }
 }

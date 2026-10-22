@@ -15,6 +15,27 @@
   <!-- Leaflet 向量地圖庫 -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.35); opacity: 0.9; }
+      80%, 100% { transform: scale(2.2); opacity: 0; }
+    }
+    .live-pulse-marker {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .live-pulse-marker::before {
+      content: '';
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background-color: rgba(6, 182, 212, 0.7);
+      animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+  </style>
 </head>
 <body class="bg-slate-950 text-slate-100 antialiased p-3 md:p-8 min-h-screen">
   <div class="max-w-6xl mx-auto space-y-6">
@@ -383,47 +404,152 @@
         </div>
 
         <!-- ========================================== -->
-        <!-- 旅人・寄出人・收貨人 三方透明身分與位置看板 (Tripartite Transparency) -->
-        <!-- 確保旅人了解貨由誰寄出與貨寄到誰的手上 (位置在哪) -->
+        <!-- ⏱️ 即時定位動態推算與剩餘時間戰情雷達 (Live GPS Tracking & Dynamic ETA Radar) -->
+        <!-- 媒合成功取得寄件人定位 ➔ 旅人取件後收件人顯示旅人定位 ➔ 旅人端掌握雙方定位動態推算剩餘時間 -->
+        <!-- ========================================== -->
+        <div class="bg-slate-950 border border-slate-800 p-4 md:p-5 rounded-2xl space-y-4 shadow-lg">
+          <!-- 頂部階段與操作按鈕 -->
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800/80 pb-3">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xl">⏱️</span>
+              <span class="text-sm font-bold text-white">即時定位動態推算與所剩時間戰情雷達</span>
+              <span id="dyn-tracking-phase-badge" class="text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                📍 階段一：媒合成功・前往取件點 (旅人 ➔ 寄件人)
+              </span>
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+              <button type="button" id="btn-toggle-simulation" onclick="toggleGpsSimulation()" class="flex-1 sm:flex-initial px-3 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-lg text-xs font-semibold shadow transition-all flex items-center justify-center gap-1.5">
+                <span>🎮</span><span id="btn-simulation-text">啟動 GPS 實時推進模擬</span>
+              </button>
+              <button type="button" onclick="requestSenderLocationUpdate()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs border border-slate-700 transition-all flex items-center gap-1">
+                <span>📡</span><span>更新寄件人 GPS</span>
+              </button>
+              <button type="button" onclick="openRecipientTrackingModal()" class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 shadow-sm">
+                <span>📱</span><span>收貨人端即時追蹤視窗</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 4 大即時 KPI 儀表板 -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+            <!-- 剩餘時間 -->
+            <div class="p-3 bg-slate-900/90 border border-blue-500/30 rounded-xl space-y-1">
+              <span class="text-[11px] text-slate-400 font-medium block flex items-center justify-center gap-1">
+                <span>⏱️</span><span id="dyn-label-remaining-time">動態推算所剩時間</span>
+              </span>
+              <div class="text-2xl md:text-3xl font-extrabold text-blue-400 font-mono">
+                <span id="dyn-remaining-minutes">8</span> <span class="text-xs text-slate-400 font-normal">分鐘</span>
+              </div>
+              <span id="dyn-eta-status-pill" class="inline-block text-[10px] text-emerald-400 font-medium">準點順暢</span>
+            </div>
+
+            <!-- 預估到達時間 -->
+            <div class="p-3 bg-slate-900/90 border border-emerald-500/30 rounded-xl space-y-1">
+              <span class="text-[11px] text-slate-400 font-medium block flex items-center justify-center gap-1">
+                <span>🏁</span><span id="dyn-label-arrival-time">預估抵達時刻</span>
+              </span>
+              <div class="text-2xl md:text-3xl font-extrabold text-emerald-400 font-mono">
+                <span id="dyn-arrival-time">15:42</span>
+              </div>
+              <span class="text-[10px] text-slate-400 font-mono">即時動態滾動推算</span>
+            </div>
+
+            <!-- 剩餘行駛距離 -->
+            <div class="p-3 bg-slate-900/90 border border-amber-500/30 rounded-xl space-y-1">
+              <span class="text-[11px] text-slate-400 font-medium block flex items-center justify-center gap-1">
+                <span>📏</span><span>剩餘折算距離</span>
+              </span>
+              <div class="text-2xl md:text-3xl font-extrabold text-amber-300 font-mono">
+                <span id="dyn-remaining-distance">2.1</span> <span class="text-xs text-slate-400 font-normal">km</span>
+              </div>
+              <span id="dyn-route-factor" class="text-[10px] text-slate-400">含路網繞行係數 1.25x</span>
+            </div>
+
+            <!-- 即時行駛速度 -->
+            <div class="p-3 bg-slate-900/90 border border-cyan-500/30 rounded-xl space-y-1">
+              <span class="text-[11px] text-slate-400 font-medium block flex items-center justify-center gap-1">
+                <span>🏎️</span><span>即時運駛時速</span>
+              </span>
+              <div class="text-2xl md:text-3xl font-extrabold text-cyan-300 font-mono">
+                <span id="dyn-current-speed">32</span> <span class="text-xs text-slate-400 font-normal">km/h</span>
+              </div>
+              <span id="dyn-transport-name" class="text-[10px] text-cyan-400">機車同城直送</span>
+            </div>
+          </div>
+
+          <!-- 動態推算演算法提示說明 -->
+          <div id="dyn-eta-algorithm-box" class="p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+              <span id="dyn-algorithm-text" class="text-[11px] text-cyan-300 font-medium">
+                📍 旅人正在前往取件點！距寄貨人 2.1 km，依機車時速與進站會面緩衝即時推算，約 8 分鐘後碰面。
+              </span>
+            </div>
+            <span class="text-[10px] text-slate-500 font-mono" id="dyn-last-update-time">最後定位更新: 剛剛</span>
+          </div>
+
+          <!-- 實時向量追蹤地圖容器 -->
+          <div class="relative rounded-xl overflow-hidden border border-slate-800 bg-slate-900 shadow-inner">
+            <div id="leaflet-traveler-map" style="height: 220px; width: 100%;" class="z-0"></div>
+            <div class="absolute bottom-2 left-2 z-[400] bg-slate-900/95 backdrop-blur-sm border border-slate-700/70 px-3 py-1.5 rounded-lg text-[10px] text-slate-200 flex items-center gap-3 shadow-md flex-wrap">
+              <span class="inline-flex items-center gap-1 font-semibold text-blue-400"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>📦 寄貨人及時定位</span>
+              <span class="inline-flex items-center gap-1 font-semibold text-cyan-300"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>🛵 旅人實時 GPS (廣播中)</span>
+              <span class="inline-flex items-center gap-1 font-semibold text-emerald-400"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>🎯 收貨人面交交付點</span>
+              <span class="text-slate-400 font-mono">──── 動態軌跡</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 旅人・寄出人・收貨人 三方透明身分與及時定位看板 (Tripartite Transparency & Live Coordinates) -->
+        <!-- 確保旅人掌握寄貨人定位及收貨人定位，收貨人掌握旅人及時定位 -->
         <!-- ========================================== -->
         <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-white flex items-center gap-1.5">
-              <span>📍</span><span>三方透明身分與面交位置核對 (旅人・寄件人・收件人)</span>
+              <span>📍</span><span>三方透明身分與及時定位核對 (旅人掌握寄貨人與收貨人定位)</span>
             </span>
-            <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">實名身分與地標完全透明</span>
+            <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">即時坐標雙向推播</span>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            <!-- 貨由誰寄出 -->
-            <div class="p-3 bg-slate-900 border border-blue-500/30 rounded-xl space-y-1.5">
+            <!-- 貨由誰寄出 (起點寄件人) -->
+            <div class="p-3 bg-slate-900 border border-blue-500/30 rounded-xl space-y-2">
               <div class="flex items-center justify-between text-blue-400 font-bold">
-                <span class="flex items-center gap-1"><span>📦</span><span>貨由誰寄出 (起點寄件人)</span></span>
-                <span class="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded font-normal">取件起點</span>
+                <span class="flex items-center gap-1"><span>📦</span><span>貨由誰寄出 (起點寄件人及時定位)</span></span>
+                <span class="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded font-normal">媒合成功已取得</span>
               </div>
               <div class="text-slate-200 font-medium">
                 姓名: <span id="tripartite-sender-name" class="text-white font-bold">陳小美</span>
                 <span id="tripartite-sender-phone" class="text-slate-400 font-mono ml-2">(0977-888-999)</span>
               </div>
-              <div class="text-[11px] text-slate-300 bg-slate-950 p-2 rounded-lg border border-slate-800">
-                <span class="text-blue-400 font-semibold block">準確取件面交地標：</span>
-                <span id="tripartite-sender-location">台北車站 M8 出口前 (公園路) ｜ GPS: 25.0456, 121.5178</span>
+              <div class="text-[11px] text-slate-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                <div class="flex justify-between items-center">
+                  <span class="text-blue-400 font-semibold">準確取件面交地標：</span>
+                  <span id="tripartite-sender-gps-badge" class="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded">GPS 定位已連線</span>
+                </div>
+                <div id="tripartite-sender-location" class="text-slate-200">台北車站 M8 出口前 (公園路)</div>
+                <div class="text-[10px] text-slate-400 font-mono" id="tripartite-sender-coords">GPS: 25.045610, 121.517890 ｜ 訊號時間: 剛剛</div>
               </div>
             </div>
 
-            <!-- 貨寄到誰手上 -->
-            <div class="p-3 bg-slate-900 border border-emerald-500/30 rounded-xl space-y-1.5">
+            <!-- 貨寄到誰手上 (終點收件人) -->
+            <div class="p-3 bg-slate-900 border border-emerald-500/30 rounded-xl space-y-2">
               <div class="flex items-center justify-between text-emerald-400 font-bold">
-                <span class="flex items-center gap-1"><span>🎯</span><span>貨寄到誰手上 (終點收件人)</span></span>
-                <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-normal">交付終點</span>
+                <span class="flex items-center gap-1"><span>🎯</span><span>貨寄到誰手上 (終點收件人及時定位)</span></span>
+                <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-normal">旅人端精準導航</span>
               </div>
               <div class="text-slate-200 font-medium">
                 姓名: <span id="tripartite-recipient-name" class="text-white font-bold">李明軒 (特助)</span>
                 <span id="tripartite-recipient-phone" class="text-slate-400 font-mono ml-2">(0933-777-888)</span>
               </div>
-              <div class="text-[11px] text-slate-300 bg-slate-950 p-2 rounded-lg border border-slate-800">
-                <span class="text-emerald-400 font-semibold block">準確送達面交地標：</span>
-                <span id="tripartite-recipient-location">台北 101 大樓 1 樓松智路門市大廳會面點 ｜ GPS: 25.0415, 121.5498</span>
+              <div class="text-[11px] text-slate-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                <div class="flex justify-between items-center">
+                  <span class="text-emerald-400 font-semibold">準確送達面交地標：</span>
+                  <span class="text-[10px] text-blue-400 font-mono bg-blue-500/10 px-1.5 py-0.5 rounded">終點坐標已鎖定</span>
+                </div>
+                <div id="tripartite-recipient-location" class="text-slate-200">台北 101 大樓 1 樓松智路門市大廳會面點</div>
+                <div class="text-[10px] text-slate-400 font-mono" id="tripartite-recipient-coords">GPS: 25.033964, 121.564472 ｜ 備註: 抵達後電話聯繫</div>
               </div>
             </div>
           </div>
@@ -739,7 +865,17 @@
         document.getElementById('view-sender').classList.remove('hidden');
         setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 120);
       }
-      if (tab === 'traveler') document.getElementById('view-traveler').classList.remove('hidden');
+      if (tab === 'traveler') {
+        document.getElementById('view-traveler').classList.remove('hidden');
+        setTimeout(() => {
+          if (travelerTrackingMap) {
+            travelerTrackingMap.invalidateSize();
+          } else {
+            initTravelerTrackingMap();
+          }
+        }, 120);
+        refreshLiveTracking();
+      }
       if (tab === 'compliance') document.getElementById('compliance-view').classList.remove('hidden');
     }
 
@@ -750,6 +886,356 @@
     let pickupMarker = null;
     let dropoffMarker = null;
     let routePolyline = null;
+
+    // ==========================================
+    // 旅人履約大廳實時追蹤地圖與動態 ETA 引擎 (Traveler Tracking Map & Dynamic ETA Engine)
+    // 媒合成功取得寄件人定位 ➔ 旅人取件後收件人顯示旅人及時定位 ➔ 旅人端掌握雙方定位動態推算剩餘時間
+    // ==========================================
+    let travelerTrackingMap = null;
+    let liveSenderMarker = null;
+    let liveTravelerMarker = null;
+    let liveRecipientMarker = null;
+    let liveTrackPolyline = null;
+    let gpsSimulationTimer = null;
+    let gpsSimIndex = 0;
+
+    const WAYPOINTS_TO_PICKUP = [
+      { lat: 25.042500, lng: 121.508200, speed: 28, desc: '旅人行經西門町衡陽路口，往台北車站前進' },
+      { lat: 25.043800, lng: 121.512200, speed: 31, desc: '旅人轉入重慶南路一段，距離寄件人 0.9 km' },
+      { lat: 25.045000, lng: 121.515000, speed: 33, desc: '旅人沿忠孝西路接近台北車站 M8 出口' },
+      { lat: 25.045610, lng: 121.517890, speed: 10, desc: '旅人抵達台北車站 M8 出口 (已與寄件人碰面會合)' }
+    ];
+
+    const WAYPOINTS_TO_DROPOFF = [
+      { lat: 25.045610, lng: 121.517890, speed: 15, desc: '旅人完成取件驗視，自台北車站出發前往信義區' },
+      { lat: 25.044500, lng: 121.528500, speed: 34, desc: '旅人沿忠孝東路一段行經善導寺' },
+      { lat: 25.042800, lng: 121.539000, speed: 36, desc: '旅人行經忠孝東路三段 (復興南路口)' },
+      { lat: 25.041500, lng: 121.549800, speed: 32, desc: '旅人行經忠孝東路四段 (敦化南路口)' },
+      { lat: 25.037500, lng: 121.558500, speed: 30, desc: '旅人切入光復南路，進入信義商圈' },
+      { lat: 25.033964, lng: 121.564472, speed: 8, desc: '旅人抵達台北 101 大樓 1 樓松智路門市大廳 (送達終點)' }
+    ];
+
+    let currentLiveState = {
+      targetPhase: 'APPROACHING_PICKUP',
+      remainingDistanceKm: 2.1,
+      remainingMinutes: 8,
+      estimatedArrivalTime: '15:42',
+      averageSpeedKmh: 32,
+      etaStatusText: '📍 旅人正前往起點！距寄貨人 2.1 km，依機車時速與進站會面緩衝即時推算，約 8 分鐘後碰面。',
+      senderLiveLocation: { lat: 25.045610, lng: 121.517890, timestamp: new Date().toISOString() },
+      travelerLiveLocation: { lat: 25.042500, lng: 121.508200, speedKmh: 32, timestamp: new Date().toISOString() },
+      recipientLocation: { lat: 25.033964, lng: 121.564472, name: '台北 101 大樓 1 樓松智路門市大廳會面點' }
+    };
+
+    function initTravelerTrackingMap() {
+      if (typeof L === 'undefined') return;
+      const el = document.getElementById('leaflet-traveler-map');
+      if (!el || travelerTrackingMap) return;
+
+      travelerTrackingMap = L.map('leaflet-traveler-map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([25.042, 121.535], 13);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
+      }).addTo(travelerTrackingMap);
+
+      updateTravelerTrackingMapMarkers();
+    }
+
+    function updateTravelerTrackingMapMarkers() {
+      if (!travelerTrackingMap || typeof L === 'undefined') return;
+      try {
+        const sLoc = currentLiveState.senderLiveLocation || { lat: 25.045610, lng: 121.517890 };
+        const tLoc = currentLiveState.travelerLiveLocation || { lat: 25.042500, lng: 121.508200 };
+        const rLoc = currentLiveState.recipientLocation || { lat: 25.033964, lng: 121.564472 };
+
+        if (liveSenderMarker) travelerTrackingMap.removeLayer(liveSenderMarker);
+        if (liveTravelerMarker) travelerTrackingMap.removeLayer(liveTravelerMarker);
+        if (liveRecipientMarker) travelerTrackingMap.removeLayer(liveRecipientMarker);
+        if (liveTrackPolyline) travelerTrackingMap.removeLayer(liveTrackPolyline);
+
+        // 寄件人 Marker (藍色圓圈)
+        liveSenderMarker = L.circleMarker([sLoc.lat, sLoc.lng], {
+          radius: 8,
+          fillColor: '#3b82f6',
+          color: '#ffffff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.95
+        }).addTo(travelerTrackingMap).bindTooltip('📦 寄件人及時定位', { permanent: false, direction: 'top' });
+
+        // 收件人 Marker (綠色圓圈)
+        liveRecipientMarker = L.circleMarker([rLoc.lat, rLoc.lng], {
+          radius: 8,
+          fillColor: '#10b981',
+          color: '#ffffff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.95
+        }).addTo(travelerTrackingMap).bindTooltip('🎯 收件人送達面交點', { permanent: false, direction: 'top' });
+
+        // 旅人 Marker (帶有自訂 pulse ring 的 Icon)
+        const travelerIcon = L.divIcon({
+          className: 'live-pulse-marker',
+          html: '<div style="width:14px;height:14px;background:#06b6d4;border:2px solid #ffffff;border-radius:50%;box-shadow:0 0 10px #06b6d4;"></div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+
+        liveTravelerMarker = L.marker([tLoc.lat, tLoc.lng], { icon: travelerIcon })
+          .addTo(travelerTrackingMap)
+          .bindTooltip(`🛵 旅人實時 GPS (${tLoc.speedKmh || 32} km/h)`, { permanent: false, direction: 'top' });
+
+        // 繪製路徑折線：若取件前連線 旅人->寄件人->收件人；若取件後連線 旅人->收件人
+        const isPickedUp = currentStep >= 1 || currentLiveState.targetPhase === 'IN_TRANSIT_DROPOFF';
+        const polylinePoints = isPickedUp
+          ? [[tLoc.lat, tLoc.lng], [rLoc.lat, rLoc.lng]]
+          : [[tLoc.lat, tLoc.lng], [sLoc.lat, sLoc.lng], [rLoc.lat, rLoc.lng]];
+
+        liveTrackPolyline = L.polyline(polylinePoints, {
+          color: '#06b6d4',
+          weight: 3.5,
+          dashArray: '5, 8',
+          opacity: 0.85
+        }).addTo(travelerTrackingMap);
+
+        const group = L.featureGroup([liveSenderMarker, liveTravelerMarker, liveRecipientMarker]);
+        travelerTrackingMap.fitBounds(group.getBounds().pad(0.25));
+      } catch (err) {
+        console.warn('Traveler tracking map marker error:', err);
+      }
+    }
+
+    async function refreshLiveTracking() {
+      try {
+        const res = await fetch(`/api/shipments/${activeTripartiteShipmentId}/live-tracking`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data) {
+            applyTrackingState(json.data);
+            return;
+          }
+        }
+      } catch (e) {
+        // use local state
+      }
+      applyTrackingState(currentLiveState);
+    }
+
+    function applyTrackingState(state) {
+      currentLiveState = state;
+      const isPickedUp = currentStep >= 1 || state.targetPhase === 'IN_TRANSIT_DROPOFF';
+
+      // 階段徽章
+      const phaseBadge = document.getElementById('dyn-tracking-phase-badge');
+      if (phaseBadge) {
+        if (currentStep >= 3 || state.targetPhase === 'DELIVERED_COMPLETED') {
+          phaseBadge.className = 'text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          phaseBadge.innerText = '🏆 階段四：簽收完成・款項已結算釋放';
+        } else if (isPickedUp) {
+          phaseBadge.className = 'text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          phaseBadge.innerText = '🚀 階段二：取件完成・順路送往終點 (旅人 ➔ 收件人)';
+        } else {
+          phaseBadge.className = 'text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30';
+          phaseBadge.innerText = '📍 階段一：媒合成功・前往取件點 (旅人 ➔ 寄件人)';
+        }
+      }
+
+      // 標籤切換
+      const lblRemaining = document.getElementById('dyn-label-remaining-time');
+      if (lblRemaining) {
+        lblRemaining.innerText = isPickedUp ? '動態送達所剩時間' : '前往取件所剩時間';
+      }
+      const lblArrival = document.getElementById('dyn-label-arrival-time');
+      if (lblArrival) {
+        lblArrival.innerText = isPickedUp ? '預計送達時刻' : '預計抵達取件時刻';
+      }
+
+      // KPI 數值
+      const remMinutes = document.getElementById('dyn-remaining-minutes');
+      if (remMinutes) remMinutes.innerText = state.remainingMinutes !== undefined ? state.remainingMinutes : '8';
+
+      const arrTime = document.getElementById('dyn-arrival-time');
+      if (arrTime) arrTime.innerText = state.estimatedArrivalTime || '15:42';
+
+      const remDist = document.getElementById('dyn-remaining-distance');
+      if (remDist) remDist.innerText = state.remainingDistanceKm !== undefined ? Number(state.remainingDistanceKm).toFixed(1) : '2.1';
+
+      const curSpeed = document.getElementById('dyn-current-speed');
+      if (curSpeed) curSpeed.innerText = state.averageSpeedKmh || (state.travelerLiveLocation && state.travelerLiveLocation.speedKmh) || 32;
+
+      // 狀態提示說明
+      const algoText = document.getElementById('dyn-algorithm-text');
+      if (algoText) algoText.innerText = state.etaStatusText || '📍 動態推算依據即時 GPS 與路網繞行係數即時計算。';
+
+      const lastUpdate = document.getElementById('dyn-last-update-time');
+      if (lastUpdate) lastUpdate.innerText = `最後定位更新: ${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+
+      // 寄件人 GPS 卡片
+      if (state.senderLiveLocation) {
+        const sCoords = document.getElementById('tripartite-sender-coords');
+        if (sCoords) {
+          sCoords.innerText = `GPS: ${state.senderLiveLocation.lat.toFixed(6)}, ${state.senderLiveLocation.lng.toFixed(6)} ｜ 訊號時間: ${new Date(state.senderLiveLocation.timestamp || Date.now()).toLocaleTimeString('zh-TW')}`;
+        }
+      }
+
+      // 收件人 GPS 卡片
+      if (state.recipientLocation) {
+        const rCoords = document.getElementById('tripartite-recipient-coords');
+        if (rCoords) {
+          rCoords.innerText = `GPS: ${state.recipientLocation.lat.toFixed(6)}, ${state.recipientLocation.lng.toFixed(6)} ｜ 終點位置鎖定`;
+        }
+      }
+
+      // 同步收貨人 Modal
+      syncRecipientModal(state);
+
+      // 同步地圖 Markers
+      updateTravelerTrackingMapMarkers();
+    }
+
+    function syncRecipientModal(state) {
+      const recMin = document.getElementById('rec-modal-remaining-minutes');
+      if (recMin) recMin.innerText = state.remainingMinutes !== undefined ? state.remainingMinutes : '8';
+
+      const recArr = document.getElementById('rec-modal-arrival-time');
+      if (recArr) recArr.innerText = state.estimatedArrivalTime || '15:42';
+
+      const recKm = document.getElementById('rec-modal-remaining-km');
+      if (recKm) recKm.innerText = state.remainingDistanceKm !== undefined ? Number(state.remainingDistanceKm).toFixed(1) : '2.1';
+
+      const recSpeed = document.getElementById('rec-modal-traveler-speed');
+      const spd = state.averageSpeedKmh || (state.travelerLiveLocation && state.travelerLiveLocation.speedKmh) || 32;
+      if (recSpeed) recSpeed.innerText = `時速: ${spd} km/h`;
+
+      const tLoc = state.travelerLiveLocation || { lat: 25.0425, lng: 121.5082 };
+      const recCoords = document.getElementById('rec-modal-traveler-coords');
+      if (recCoords) recCoords.innerText = `旅人 GPS: ${tLoc.lat.toFixed(6)}, ${tLoc.lng.toFixed(6)}`;
+
+      const recPhase = document.getElementById('rec-modal-phase-text');
+      if (recPhase) {
+        if (currentStep >= 3) {
+          recPhase.innerText = '🎉 包裹已安全送達！雙照存證完成，感謝使用！';
+        } else if (currentStep >= 1) {
+          recPhase.innerText = '🛵 旅人正在將您的包裹送往目的地！';
+        } else {
+          recPhase.innerText = '📍 媒合成功！旅人正前往起點取件中...';
+        }
+      }
+
+      // POD 1 圖片同步
+      const pod1Img = document.getElementById('rec-modal-pod1-img');
+      const pod1Holder = document.getElementById('rec-modal-pod1-placeholder');
+      if (pod1Img && pod1Holder) {
+        if (pod1PhotoUrl) {
+          pod1Img.src = pod1PhotoUrl;
+          pod1Img.classList.remove('hidden');
+          pod1Holder.classList.add('hidden');
+        } else {
+          pod1Img.classList.add('hidden');
+          pod1Holder.classList.remove('hidden');
+        }
+      }
+    }
+
+    async function reportLiveLocation(role, lat, lng, speedKmh, addressDescription) {
+      try {
+        const res = await fetch(`/api/shipments/${activeTripartiteShipmentId}/live-location`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role, lat, lng, speedKmh, addressDescription })
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data) {
+            applyTrackingState(json.data);
+            return json.data;
+          }
+        }
+      } catch (err) {
+        console.warn('Report location fallback:', err);
+      }
+      return null;
+    }
+
+    function requestSenderLocationUpdate() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            await reportLiveLocation('SENDER', lat, lng, 0, '寄件人實機 HTML5 GPS 定位');
+            alert(`📍 寄件人即時 GPS 已成功回報！\n經緯度: ${lat.toFixed(6)}, ${lng.toFixed(6)}\n旅人端已同步更新抵達起點的推算時間！`);
+          },
+          async (err) => {
+            const defLat = 25.045610;
+            const defLng = 121.517890;
+            await reportLiveLocation('SENDER', defLat, defLng, 0, '台北車站 M8 出口前');
+            alert(`📍 已刷新寄件人及時定位！\n坐標: ${defLat}, ${defLng} (台北車站 M8 出口前)`);
+          },
+          { timeout: 5000 }
+        );
+      } else {
+        alert('此裝置不支援 HTML5 Geolocation，已採用基準坐標回報！');
+      }
+    }
+
+    function toggleGpsSimulation() {
+      const btnText = document.getElementById('btn-simulation-text');
+      const btn = document.getElementById('btn-toggle-simulation');
+
+      if (gpsSimulationTimer) {
+        clearInterval(gpsSimulationTimer);
+        gpsSimulationTimer = null;
+        if (btnText) btnText.innerText = '啟動 GPS 實時推進模擬';
+        if (btn) btn.className = 'flex-1 sm:flex-initial px-3 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-lg text-xs font-semibold shadow transition-all flex items-center justify-center gap-1.5';
+        return;
+      }
+
+      if (btnText) btnText.innerText = '⏹️ 暫停 GPS 推進模擬';
+      if (btn) btn.className = 'flex-1 sm:flex-initial px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold shadow transition-all flex items-center justify-center gap-1.5';
+
+      gpsSimIndex = 0;
+      gpsSimulationTimer = setInterval(async () => {
+        const isPickedUp = currentStep >= 1;
+        const waypoints = isPickedUp ? WAYPOINTS_TO_DROPOFF : WAYPOINTS_TO_PICKUP;
+
+        if (gpsSimIndex >= waypoints.length) {
+          clearInterval(gpsSimulationTimer);
+          gpsSimulationTimer = null;
+          if (btnText) btnText.innerText = '啟動 GPS 實時推進模擬';
+          if (btn) btn.className = 'flex-1 sm:flex-initial px-3 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-lg text-xs font-semibold shadow transition-all flex items-center justify-center gap-1.5';
+
+          if (!isPickedUp) {
+            alert('📍 旅人已抵達起點！\n已與寄件人陳小美碰面，請寄件人提供開箱驗視與 6 位數取件 OTP (382104) 進行啟程驗證！');
+          } else {
+            alert('🎉 旅人已抵達終點！\n收貨人端即時顯示旅人已在台北 101 大樓門市大廳，請雙方碰面進行現場拆箱與雙照特徵一致性核驗！');
+          }
+          return;
+        }
+
+        const wp = waypoints[gpsSimIndex];
+        gpsSimIndex++;
+
+        await reportLiveLocation('TRAVELER', wp.lat, wp.lng, wp.speed, wp.desc);
+      }, 2000);
+    }
+
+    function openRecipientTrackingModal() {
+      const modal = document.getElementById('recipient-tracking-modal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        syncRecipientModal(currentLiveState);
+      }
+    }
+
+    function closeRecipientTrackingModal() {
+      const modal = document.getElementById('recipient-tracking-modal');
+      if (modal) modal.classList.add('hidden');
+    }
 
     function initLeafletMap() {
       if (typeof L === 'undefined') return;
@@ -1728,9 +2214,32 @@
       document.getElementById('btn-verify-pickup').innerText = `已驗證啟程 (經手旅人: ${currentUser.name})`;
       document.getElementById('btn-verify-pickup').className = 'px-4 py-2 bg-slate-800 text-slate-500 text-xs font-semibold rounded-lg cursor-not-allowed';
 
+      // 呼叫後端 inspect-and-pickup 更新訂單狀態為 IN_TRANSIT
+      fetch(`/api/shipments/${activeTripartiteShipmentId}/inspect-and-pickup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          travelerId: currentUser.id,
+          otp,
+          checklist: {
+            noContrabandConfirmed: true,
+            physicalAppearanceChecked: true,
+            packageOpenedAndInspected: true,
+            sealedInPresenceOfSender: true
+          },
+          photoUrls: [
+            pod1PhotoUrl || 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400',
+            'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400'
+          ]
+        })
+      }).catch(e => console.warn('inspect-and-pickup offline fallback:', e));
+
+      // 即時推進追蹤狀態至配送階段 (IN_TRANSIT_DROPOFF)
+      reportLiveLocation('TRAVELER', 25.045610, 121.517890, 20, '旅人完成取件，自台北車站啟程前往台北 101');
+
       const statusBox = document.getElementById('flow-status');
       statusBox.className = 'p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 flex items-center gap-2';
-      statusBox.innerHTML = `<span>🚀</span><span>包裹運送中 [IN_TRANSIT]！經手旅人【${currentUser.name}】已建立開箱防調包基準照。抵達後請與收件人碰面執行拆箱雙照比對。</span>`;
+      statusBox.innerHTML = `<span>🚀</span><span>包裹運送中 [IN_TRANSIT]！經手旅人【${currentUser.name}】已建立開箱防調包基準照。收貨人端已同步連線旅人即時定位與動態 ETA 倒數！</span>`;
     }
 
     // ==========================================
@@ -1917,6 +2426,26 @@
       document.getElementById('btn-verify-dropoff').innerText = '簽收完成';
       document.getElementById('btn-verify-dropoff').disabled = true;
 
+      // 呼叫後端 deliver 結算解鎖 Escrow
+      fetch(`/api/shipments/${activeTripartiteShipmentId}/deliver`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          travelerId: currentUser.id,
+          otp,
+          photoUrls: [pod2PhotoUrl || 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400']
+        })
+      }).catch(e => console.warn('deliver offline fallback:', e));
+
+      // 即時更新追蹤狀態為已送達
+      if (currentLiveState) {
+        currentLiveState.targetPhase = 'DELIVERED_COMPLETED';
+        currentLiveState.remainingMinutes = 0;
+        currentLiveState.remainingDistanceKm = 0;
+        currentLiveState.etaStatusText = '🏆 包裹已當面點交簽收完畢！雙照特徵吻合放行，託管款項結算成功。';
+        applyTrackingState(currentLiveState);
+      }
+
       // 模擬 Escrow 結算撥款
       const rewardTwd = 105;
       if (currentUser) {
@@ -1931,8 +2460,10 @@
 
     // 初始化地圖、運具模式與帳號狀態
     initLeafletMap();
+    initTravelerTrackingMap();
     selectMode('MOTORCYCLE');
     initAuth();
+    refreshLiveTracking();
 
     // 註冊 PWA Service Worker
     if ('serviceWorker' in navigator) {
@@ -2121,6 +2652,123 @@
           <span>⚡</span><span id="topup-btn-text">確認儲值 NT$ 1,000 (模擬扣款)</span>
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 彈出視窗：收貨人端即時定位與剩餘時間追蹤視窗 (Recipient Live Tracking Modal) -->
+  <!-- 旅人取件後於收貨人端顯示旅人及時定位與預估剩餘時間 -->
+  <!-- ========================================== -->
+  <div id="recipient-tracking-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 text-slate-100 relative max-h-[92vh] overflow-y-auto">
+      
+      <!-- 關閉按鈕 -->
+      <button onclick="closeRecipientTrackingModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg p-1.5 rounded-lg hover:bg-slate-800 transition-all">
+        ✕
+      </button>
+
+      <!-- 頂部身分與訂單資訊 -->
+      <div class="border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">📱</span>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-base font-bold text-white">收貨人端即時追蹤視角</h3>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">收件人手機端模式</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-0.5">訂單編號: <span class="text-blue-400 font-mono font-bold" id="rec-modal-shipment-id">PKG_202610_8829</span> ｜ 收件人: <span id="rec-modal-recipient-name" class="text-slate-200 font-semibold">李明軒 (特助)</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 核心倒數動態卡片 -->
+      <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-950/60 via-slate-900 to-emerald-950/40 border border-blue-500/30 space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-xs font-semibold text-blue-300 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span id="rec-modal-phase-text">🛵 旅人正在將您的包裹送往目的地！</span>
+          </span>
+          <span id="rec-modal-status-badge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">GPS 訊號良好</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 text-center pt-1">
+          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
+            <span class="text-[10px] text-slate-400 block mb-0.5">預計送達所剩時間</span>
+            <div class="text-2xl font-black text-blue-400 font-mono">
+              <span id="rec-modal-remaining-minutes">8</span> <span class="text-[11px] text-slate-400 font-normal">分</span>
+            </div>
+          </div>
+          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
+            <span class="text-[10px] text-slate-400 block mb-0.5">預計送達時刻</span>
+            <div class="text-xl font-bold text-emerald-400 font-mono mt-0.5" id="rec-modal-arrival-time">
+              15:42
+            </div>
+          </div>
+          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
+            <span class="text-[10px] text-slate-400 block mb-0.5">距離終點距離</span>
+            <div class="text-xl font-bold text-amber-300 font-mono mt-0.5">
+              <span id="rec-modal-remaining-km">2.1</span> <span class="text-[10px] text-slate-400 font-normal">km</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-[11px] text-slate-300 leading-relaxed bg-slate-950/60 p-2 rounded-lg border border-slate-800/80" id="rec-modal-dynamic-note">
+          動態 ETA 引擎已依據旅人即時 GPS (時速 32 km/h) 與台北市區路網係數 (1.25x) 自動計算。
+        </p>
+      </div>
+
+      <!-- 旅人即時定位與面交地標卡片 -->
+      <div class="space-y-2.5 text-xs">
+        <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-white flex items-center gap-1.5 text-xs">
+              <span>🛵</span><span>順路旅人資訊與及時定位</span>
+            </span>
+            <span class="text-[10px] text-cyan-300 font-mono" id="rec-modal-traveler-speed">時速: 32 km/h</span>
+          </div>
+          <div class="text-slate-300 flex justify-between">
+            <span>經手旅人: <b class="text-white" id="rec-modal-traveler-name">林晨旅</b> (機車同城直送)</span>
+            <a href="tel:0912345678" class="text-blue-400 hover:underline font-mono">撥打旅人電話 📞</a>
+          </div>
+          <div class="text-[11px] text-cyan-300 font-mono bg-slate-900 p-2 rounded border border-slate-800/80 flex justify-between items-center">
+            <span id="rec-modal-traveler-coords">旅人 GPS: 25.042500, 121.508200</span>
+            <span class="text-[10px] text-slate-400">定位持續更新</span>
+          </div>
+        </div>
+
+        <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+          <div class="flex justify-between items-center text-slate-400 text-[11px]">
+            <span class="font-semibold text-emerald-400 flex items-center gap-1"><span>🎯</span><span>約定終點面交位置</span></span>
+            <span class="text-[10px] font-mono">面交時現場雙照開箱核驗</span>
+          </div>
+          <div class="text-white font-medium" id="rec-modal-dropoff-location">
+            台北 101 大樓 1 樓松智路門市大廳會面點 (信義路五段7號)
+          </div>
+        </div>
+
+        <!-- 派發基準照片 POD 1 預覽 (收件人預先核對防調包) -->
+        <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
+          <div class="flex justify-between items-center text-[11px]">
+            <span class="font-semibold text-slate-300">📦 取件時派發存證基準照 (POD 1):</span>
+            <span class="text-[10px] text-emerald-400">完整封條防調包</span>
+          </div>
+          <div class="h-24 bg-slate-900 rounded-lg flex items-center justify-center border border-dashed border-slate-700 text-slate-500 overflow-hidden relative">
+            <img id="rec-modal-pod1-img" class="w-full h-full object-cover hidden" alt="基準照片">
+            <span id="rec-modal-pod1-placeholder" class="text-xs text-slate-400">📦 基準照片已封存，送達拆箱時進行特徵比對</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 操作按鈕 -->
+      <div class="flex gap-2 pt-1">
+        <button type="button" onclick="closeRecipientTrackingModal(); switchTab('traveler');" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition-all border border-slate-700">
+          返回旅人履約大廳
+        </button>
+        <button type="button" onclick="closeRecipientTrackingModal()" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition-all shadow">
+          知道了，保持監控
+        </button>
+      </div>
+
     </div>
   </div>
 </body>
