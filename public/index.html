@@ -427,6 +427,9 @@
               <button type="button" onclick="openRecipientTrackingModal()" class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 shadow-sm">
                 <span>📱</span><span>收貨人端即時追蹤視窗</span>
               </button>
+              <a id="btn-google-maps-nav" href="https://www.google.com/maps/dir/?api=1&destination=25.045610,121.517890" target="_blank" class="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 shadow-sm">
+                <span>🗺️</span><span id="btn-google-maps-text">Google Maps 官方導航</span>
+              </a>
             </div>
           </div>
 
@@ -530,6 +533,11 @@
                 </div>
                 <div id="tripartite-sender-location" class="text-slate-200">台北車站 M8 出口前 (公園路)</div>
                 <div class="text-[10px] text-slate-400 font-mono" id="tripartite-sender-coords">GPS: 25.045610, 121.517890 ｜ 訊號時間: 剛剛</div>
+                <div class="pt-1 border-t border-slate-800/80">
+                  <a id="link-sender-gmaps" href="https://www.google.com/maps/search/?api=1&query=25.045610,121.517890" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 underline font-medium">
+                    <span>🗺️</span><span>在 Google Maps 中開啟起點取件位置</span>
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -550,6 +558,11 @@
                 </div>
                 <div id="tripartite-recipient-location" class="text-slate-200">台北 101 大樓 1 樓松智路門市大廳會面點</div>
                 <div class="text-[10px] text-slate-400 font-mono" id="tripartite-recipient-coords">GPS: 25.033964, 121.564472 ｜ 備註: 抵達後電話聯繫</div>
+                <div class="pt-1 border-t border-slate-800/80">
+                  <a id="link-recipient-gmaps" href="https://www.google.com/maps/dir/?api=1&destination=25.033964,121.564472" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 underline font-medium">
+                    <span>🗺️</span><span>一鍵開啟 Google Maps 終點語音導航</span>
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -1087,6 +1100,17 @@
         const rCoords = document.getElementById('tripartite-recipient-coords');
         if (rCoords) {
           rCoords.innerText = `GPS: ${state.recipientLocation.lat.toFixed(6)}, ${state.recipientLocation.lng.toFixed(6)} ｜ 終點位置鎖定`;
+        }
+      }
+
+      // Google Maps 官方導航按鈕更新
+      const gmapsBtn = document.getElementById('btn-google-maps-nav');
+      const gmapsText = document.getElementById('btn-google-maps-text');
+      if (gmapsBtn) {
+        const dest = isPickedUp ? (state.recipientLocation || { lat: 25.033964, lng: 121.564472 }) : (state.senderLiveLocation || { lat: 25.045610, lng: 121.517890 });
+        gmapsBtn.href = `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}`;
+        if (gmapsText) {
+          gmapsText.innerText = isPickedUp ? 'Google Maps 送達導航' : 'Google Maps 取件導航';
         }
       }
 
